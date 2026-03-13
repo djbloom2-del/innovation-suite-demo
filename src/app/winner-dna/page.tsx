@@ -147,7 +147,7 @@ export default function WinnerDNA() {
           <ResponsiveContainer width="100%" height={280}>
             <ScatterChart margin={{ top: 8, right: 16, bottom: 8, left: -8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="x" name="Launches" tick={{ fontSize: 10 }} label={{ value: "Launch Count", position: "insideBottom", offset: -4, fontSize: 10 }} />
+              <XAxis dataKey="x" name="Launches" type="number" domain={[0, 25]} allowDecimals={false} tick={{ fontSize: 10 }} label={{ value: "Launch Count", position: "insideBottom", offset: -4, fontSize: 10 }} />
               <YAxis dataKey="y" name="Win Rate" tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}%`} label={{ value: "Win Rate %", angle: -90, position: "insideLeft", offset: 12, fontSize: 10 }} />
               <ZAxis dataKey="z" range={[40, 400]} />
               <Tooltip
