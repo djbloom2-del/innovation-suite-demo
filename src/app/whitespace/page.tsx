@@ -71,7 +71,7 @@ function launchMatchesAttr(l: Launch, attrName: string, attrValue: string): bool
 function genBriefDescription(attr: AttributePerf): string {
   const wr  = Math.round(attr.winRate * 100);
   const pen = Math.round(attr.penetrationRate * 100);
-  const oi  = attr.overindexVsAll.toFixed(1);
+  const oi  = attr.overindexVsAll;
   const phrases: Record<string, string> = {
     Organic:      "Organic",
     "Non-GMO":    "Non-GMO",
@@ -81,8 +81,31 @@ function genBriefDescription(attr: AttributePerf): string {
     Protein:      "Protein-focused",
   };
   const phrase = phrases[attr.attributeName] ?? attr.attributeName;
-  const trend = attr.trend === "rising" ? " Adoption is accelerating." : "";
-  return `${phrase} ${attr.category} launches win at ${wr}% but only ${pen}% of launches carry this claim — ${oi}× the category baseline.${trend}`;
+
+  // Case 1 — Underperforms baseline: attribute correlates with lower win rate than category average
+  if (oi < 1.0) {
+    const gap = Math.round((1 - oi) * 100);
+    const trendNote = attr.trend === "declining" ? " Declining adoption adds to the headwinds." : "";
+    return `${phrase} ${attr.category} launches trail the category win rate by ${gap}% on average. Present in ${pen}% of launches but not driving a meaningful win-rate advantage.${trendNote}`;
+  }
+
+  // Case 2 — Saturated: already in nearly half of launches, limited whitespace remaining
+  if (attr.penetrationRate >= 0.45) {
+    const trendNote =
+      attr.trend === "declining" ? " Adoption is also decelerating, suggesting the trend may have peaked." :
+      attr.trend === "rising"    ? " New launches continue to pick it up, reinforcing it as table stakes." :
+      "";
+    return `${phrase} is already present in ${pen}% of ${attr.category} launches — approaching table stakes. Win rate advantage (${wr}%) remains but high penetration limits remaining whitespace.${trendNote}`;
+  }
+
+  // Case 3 — Declining trend: direction is negative even if penetration is moderate
+  if (attr.trend === "declining") {
+    return `${phrase} ${attr.category} launches show a ${wr}% win rate (${oi.toFixed(1)}× baseline) but adoption is decelerating. At ${pen}% penetration the window may be closing — act early or look elsewhere.`;
+  }
+
+  // Case 4 — Standard positive opportunity
+  const trendNote = attr.trend === "rising" ? " Adoption is accelerating." : "";
+  return `${phrase} ${attr.category} launches win at ${wr}% but only ${pen}% of launches carry this claim — ${oi.toFixed(1)}× the category baseline.${trendNote}`;
 }
 
 function matchesComboAttr(l: Launch, attr: AttrKey): boolean {
@@ -94,12 +117,6 @@ function matchesComboAttr(l: Launch, attr: AttrKey): boolean {
   if (attr === "Keto")         return a.isKeto;
   if (attr === "Protein")      return a.isProteinFocused;
   return false;
-}
-
-function trendColor(trend: string): string {
-  if (trend === "rising")    return "#16a34a";
-  if (trend === "declining") return "#dc2626";
-  return "#2563eb";
 }
 
 function trendChipClass(trend: string): string {
@@ -130,44 +147,11 @@ export default function WhitespaceLab() {
   const opportunities = [...WHITESPACE_OPPORTUNITIES].sort((a, b) => b.whitespaceScore - a.whitespaceScore);
 
   // ── State ────────────────────────────────────────────────────────────────
-  const [quadrantCat, setQuadrantCat] = useState<string>("All");
   const [briefCat,    setBriefCat]    = useState<string>("All");
   const [briefTrend,  setBriefTrend]  = useState<string>("All");
   const [sortBriefs,  setSortBriefs]  = useState<"opportunity" | "winRate" | "prize">("opportunity");
   const [comboAttrs,  setComboAttrs]  = useState<AttrKey[]>([]);
   const [comboCat,    setComboCat]    = useState<Category>("Bars");
-
-  // ── useMemo: quadrantData ────────────────────────────────────────────────
-  const quadrantData = useMemo(() => {
-    const attrs =
-      quadrantCat === "All"
-        ? ATTRIBUTE_PERFORMANCE
-        : ATTRIBUTE_PERFORMANCE.filter((a) => a.category === quadrantCat);
-
-    if (quadrantCat === "All") {
-      const map = new Map<string, { sumWr: number; sumPen: number; count: number; trend: string; overindex: number }>();
-      attrs.forEach((a) => {
-        const key = `${a.attributeName}:${a.attributeValue}`;
-        const ex  = map.get(key);
-        if (ex) { ex.sumWr += a.winRate; ex.sumPen += a.penetrationRate; ex.count += 1; }
-        else    { map.set(key, { sumWr: a.winRate, sumPen: a.penetrationRate, count: 1, trend: a.trend, overindex: a.overindexVsAll }); }
-      });
-      return Array.from(map.entries()).map(([key, v]) => ({
-        name:            key.split(":")[0],
-        winRate:         v.sumWr  / v.count,
-        penetrationRate: v.sumPen / v.count,
-        trend:           v.trend,
-        overindex:       v.overindex,
-      }));
-    }
-    return attrs.map((a) => ({
-      name:            a.attributeName,
-      winRate:         a.winRate,
-      penetrationRate: a.penetrationRate,
-      trend:           a.trend,
-      overindex:       a.overindexVsAll,
-    }));
-  }, [quadrantCat]);
 
   // ── useMemo: briefCards ──────────────────────────────────────────────────
   const briefCards = useMemo(() => {
@@ -346,8 +330,8 @@ export default function WhitespaceLab() {
         <div className="bg-white rounded-xl border border-slate-200 p-5">
           <h2 className="text-sm font-semibold text-slate-700 mb-1">Attribute Gap Signals</h2>
           <p className="text-xs text-slate-400 mb-4">High win rate, low penetration — underserved demand</p>
-          <div className="space-y-3">
-            {risingAttrs.slice(0, 8).map((attr) => (
+          <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+            {risingAttrs.map((attr) => (
               <div key={`${attr.category}-${attr.attributeName}`} className="border border-slate-100 rounded-lg p-3">
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div>
@@ -376,90 +360,7 @@ export default function WhitespaceLab() {
         </div>
       </div>
 
-      {/* ── Section 2: Attribute Opportunity Quadrant ─────────────────────── */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <div>
-            <h2 className="text-sm font-semibold text-slate-700">Attribute Opportunity Quadrant</h2>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Top-left = highest opportunity — winning but underpenetrated
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {["All", ...CATEGORIES].map((cat) => (
-              <button key={cat} onClick={() => setQuadrantCat(cat)} className={pillCls(quadrantCat === cat)}>{cat}</button>
-            ))}
-          </div>
-        </div>
-        <ResponsiveContainer width="100%" height={260}>
-          <ScatterChart margin={{ top: 10, right: 24, bottom: 28, left: 10 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-            <XAxis
-              dataKey="penetrationRate" name="Penetration" type="number" domain={[0, 0.65]}
-              tick={{ fontSize: 10 }} tickFormatter={(v) => `${Math.round(v * 100)}%`}
-              axisLine={false} tickLine={false}
-              label={{ value: "← Lower Penetration   Higher Penetration →", position: "insideBottom", offset: -14, fontSize: 10, fill: "#94a3b8" }}
-            />
-            <YAxis
-              dataKey="winRate" name="Win Rate" type="number" domain={[0, 0.85]}
-              tick={{ fontSize: 10 }} tickFormatter={(v) => `${Math.round(v * 100)}%`}
-              axisLine={false} tickLine={false}
-              label={{ value: "Win Rate", angle: -90, position: "insideLeft", offset: 10, fontSize: 10, fill: "#94a3b8" }}
-            />
-            <ZAxis range={[60, 60]} />
-            <ReferenceLine x={0.3}  stroke="#e2e8f0" strokeDasharray="4 2" />
-            <ReferenceLine y={0.35} stroke="#e2e8f0" strokeDasharray="4 2" />
-            <Tooltip
-              content={({ payload }) => {
-                if (!payload?.length) return null;
-                const d = payload[0].payload;
-                return (
-                  <div className="bg-white border border-slate-200 rounded-lg p-3 text-xs shadow-md">
-                    <div className="font-semibold text-slate-800 mb-1">{d.name}</div>
-                    <div className="text-slate-500">Win Rate: {Math.round(d.winRate * 100)}%</div>
-                    <div className="text-slate-500">Penetration: {Math.round(d.penetrationRate * 100)}%</div>
-                    <div className="text-slate-500">Overindex: {d.overindex.toFixed(1)}×</div>
-                  </div>
-                );
-              }}
-            />
-            <Scatter
-              data={quadrantData}
-              shape={(props: any) => {
-                const { cx, cy, payload } = props;
-                const color  = trendColor(payload.trend);
-                const isHigh = payload.penetrationRate < 0.25 && payload.winRate > 0.5;
-                return (
-                  <g>
-                    <circle cx={cx} cy={cy} r={isHigh ? 7 : 5} fill={color} fillOpacity={0.75} stroke={color} strokeWidth={isHigh ? 2 : 1} />
-                    {isHigh && (
-                      <text x={cx} y={cy - 10} textAnchor="middle" fontSize={9} fill="#1e293b" fontWeight={600}>
-                        {payload.name}
-                      </text>
-                    )}
-                  </g>
-                );
-              }}
-            />
-          </ScatterChart>
-        </ResponsiveContainer>
-        <div className="mt-2 flex gap-4 flex-wrap">
-          <div className="text-[10px] font-semibold text-green-600">★ Top-left: High Win + Low Penetration = Best Opportunity</div>
-          <div className="text-[10px] font-medium text-amber-600">Top-right: High Win + High Penetration = Established</div>
-          {[
-            { label: "Rising",   color: "#16a34a" },
-            { label: "Stable",   color: "#2563eb" },
-            { label: "Declining",color: "#dc2626" },
-          ].map(({ label, color }) => (
-            <div key={label} className="flex items-center gap-1.5 text-xs text-slate-500">
-              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
-              {label}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Section 3: Opportunity Brief Gallery ──────────────────────────── */}
+      {/* ── Section 2: Opportunity Brief Gallery ──────────────────────────── */}
       <div className="bg-white rounded-xl border border-slate-200 p-5">
         <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
           <div>
@@ -579,7 +480,7 @@ export default function WhitespaceLab() {
         )}
       </div>
 
-      {/* ── Section 4: Attribute Combo Whitespace Finder ─────────────────── */}
+      {/* ── Section 3: Attribute Combo Whitespace Finder ─────────────────── */}
       <div className="bg-white rounded-xl border border-slate-200 p-5">
         <div className="flex items-center gap-2 mb-1">
           <Layers size={15} className="text-blue-500" />
