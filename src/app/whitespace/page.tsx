@@ -102,7 +102,9 @@ export default function WhitespaceLab() {
               <Scatter
                 data={bubbleData}
                 shape={(props: any) => {
-                  const { cx, cy, r, payload } = props;
+                  const { cx, cy, payload } = props;
+                  // In Recharts 3.x, ZAxis area is in props.size; derive radius from it
+                  const r = Math.sqrt((props.size ?? 600) / Math.PI);
                   const color = categoryColor(payload.category);
                   return (
                     <g>

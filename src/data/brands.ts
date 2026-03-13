@@ -9,7 +9,8 @@ function buildBrand(
 ): Brand {
   const launches = LAUNCHES.filter((l) => l.brand === name);
   const categories = [...new Set(launches.map((l) => l.category))] as Brand["categories"];
-  const newItemDollars = launches.reduce((s, l) => s + l.dollarsLatest, 0);
+  // Use annual run-rate (velocity × stores × 52) so new-item dollars are comparable to coreDollars scale
+  const newItemDollars = launches.reduce((s, l) => s + l.velocityLatest * l.storesSellingLatest * 52, 0);
   const totalDollars = coreDollars + newItemDollars;
   const totalGrowth = totalDollars - priorTotal;
   const winners = launches.filter((l) => l.launchQualityScore >= 70);

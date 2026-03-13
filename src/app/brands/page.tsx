@@ -29,12 +29,14 @@ export default function BrandGrowthEngine() {
   const growthPct = (brand.totalDollars - brand.totalDollarsPrior) / (brand.totalDollarsPrior || 1);
   const coreGrowth = brand.totalDollars - brand.totalDollarsPrior - brand.newItemDollars;
 
-  // Waterfall data for growth decomposition
+  // Proper waterfall: stacked bar with transparent base + colored change
+  // coreGrowth can be negative (core declined), shown as red bar
+  const coreLabel = coreGrowth >= 0 ? "Core Growth" : "Core Decline";
   const waterfallData = [
-    { name: "Prior Year", value: brand.totalDollarsPrior, fill: "#e2e8f0", start: 0 },
-    { name: "Core Growth", value: Math.max(0, coreGrowth), fill: "#93c5fd", start: brand.totalDollarsPrior },
-    { name: "New Items", value: brand.newItemDollars, fill: "#2563eb", start: brand.totalDollarsPrior + Math.max(0, coreGrowth) },
-    { name: "Current Year", value: brand.totalDollars, fill: "#1d4ed8", start: 0 },
+    { name: "Prior Year",   invisible: 0,                                                    bar: brand.totalDollarsPrior, type: "total"    },
+    { name: coreLabel,      invisible: brand.totalDollarsPrior + Math.min(0, coreGrowth),    bar: Math.abs(coreGrowth),    type: coreGrowth >= 0 ? "positive" : "negative" },
+    { name: "New Items",    invisible: brand.coreDollars,                                     bar: brand.newItemDollars,    type: "positive"  },
+    { name: "Current Year", invisible: 0,                                                    bar: brand.totalDollars,      type: "total"    },
   ];
 
   // Brand scatter: launch count vs win rate
@@ -101,20 +103,21 @@ export default function BrandGrowthEngine() {
               <XAxis dataKey="name" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `$${(v/1e6).toFixed(1)}M`} axisLine={false} tickLine={false} />
               <Tooltip
-                formatter={(v: any) => [fmt$(v as number), ""]}
+                formatter={(v: any, name: any) => name === "bar" ? [fmt$(v as number), ""] : null}
                 contentStyle={{ fontSize: 11, border: "1px solid #e2e8f0" }}
               />
-              <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+              <Bar dataKey="invisible" stackId="wf" fill="transparent" />
+              <Bar dataKey="bar" stackId="wf" radius={[4, 4, 0, 0]}>
                 {waterfallData.map((d, idx) => (
-                  <Cell key={idx} fill={d.fill} />
+                  <Cell key={idx} fill={d.type === "total" ? "#1e40af" : d.type === "positive" ? "#2563eb" : "#ef4444"} />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
           <div className="mt-3 flex gap-4 text-xs">
             <div className="flex items-center gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-sm bg-[#93c5fd]" />
-              <span className="text-slate-500">Core growth: {fmt$(Math.max(0, coreGrowth))}</span>
+              <div className={`w-2.5 h-2.5 rounded-sm ${coreGrowth >= 0 ? "bg-[#2563eb]" : "bg-red-500"}`} />
+              <span className="text-slate-500">{coreLabel}: {coreGrowth >= 0 ? "" : "-"}{fmt$(Math.abs(coreGrowth))}</span>
             </div>
             <div className="flex items-center gap-1.5">
               <div className="w-2.5 h-2.5 rounded-sm bg-[#2563eb]" />
