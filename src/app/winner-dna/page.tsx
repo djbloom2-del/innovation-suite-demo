@@ -1,14 +1,15 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import type { Category } from "@/lib/types";
+import type { Category, Launch } from "@/lib/types";
 import { CATEGORIES } from "@/data/categories";
 import {
-  getAttributePerfByCategory,
   getTopAttributesByWinRate,
   getRisingUnderpenetrated,
   ATTRIBUTE_COMBOS,
 } from "@/data/attributes";
+import { LAUNCHES, getWinners } from "@/data/launches";
+import { fmt$, scoreBg } from "@/lib/utils";
 import {
   BarChart,
   Bar,
@@ -21,16 +22,43 @@ import {
   Scatter,
   ZAxis,
   CartesianGrid,
-  Legend,
+  ReferenceLine,
 } from "recharts";
-import { TrendingUp, Zap } from "lucide-react";
+import { TrendingUp, Zap, ListFilter } from "lucide-react";
 
 const ATTR_COLORS = [
   "#2563eb","#16a34a","#7c3aed","#d97706","#0891b2","#db2777","#059669","#9333ea",
 ];
 
+// ── Attribute Combo Explorer helpers ────────────────────────────
+const ATTR_KEYS = ["Organic","Non-GMO","Gluten-Free","Vegan","Keto","Protein"] as const;
+type AttrKey = typeof ATTR_KEYS[number];
+
+function matchesAttr(l: Launch, attr: AttrKey): boolean {
+  const a = l.attributes;
+  if (attr === "Organic")     return a.isOrganic;
+  if (attr === "Non-GMO")     return a.isNonGmo;
+  if (attr === "Gluten-Free") return a.isGlutenFree;
+  if (attr === "Vegan")       return a.isVegan;
+  if (attr === "Keto")        return a.isKeto;
+  if (attr === "Protein")     return a.isProteinFocused;
+  return false;
+}
+
+function medianVal(vals: number[]): number {
+  if (!vals.length) return 0;
+  const s = [...vals].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+// ────────────────────────────────────────────────────────────────
+
 export default function WinnerDNA() {
   const [category, setCategory] = useState<Category>("Bars");
+
+  // ── Explorer state ──
+  const [selectedAttrs, setSelectedAttrs] = useState<AttrKey[]>([]);
+  const [explorerCat, setExplorerCat] = useState<Category>("Bars");
 
   const topAttrs = useMemo(
     () => getTopAttributesByWinRate(category, 12),
@@ -53,12 +81,66 @@ export default function WinnerDNA() {
     lift: c.lift,
   }));
 
+  // ── Explorer data ──
+  const explorerData = useMemo(() => {
+    const catLaunches = LAUNCHES.filter(l => l.category === explorerCat);
+    const catWinners  = getWinners(catLaunches);
+    const catWinRate  = catLaunches.length ? catWinners.length / catLaunches.length : 0;
+
+    const matched = selectedAttrs.length === 0
+      ? catLaunches
+      : catLaunches.filter(l => selectedAttrs.every(a => matchesAttr(l, a)));
+    const matchedWinners = getWinners(matched);
+    const comboWinRate   = matched.length ? matchedWinners.length / matched.length : 0;
+    const lift           = catWinRate > 0 ? comboWinRate / catWinRate : 1;
+    const med26w         = medianVal(matched.filter(l => l.dollars26w != null).map(l => l.dollars26w!));
+
+    // Per-attribute standalone win rates (for comparison chart)
+    const singleStats = ATTR_KEYS.map(attr => {
+      const sub    = catLaunches.filter(l => matchesAttr(l, attr));
+      const subWin = getWinners(sub);
+      return { attr, winRate: sub.length ? subWin.length / sub.length : 0, count: sub.length };
+    });
+
+    // Chart rows: one per attribute + a "Combination ★" row when 2+ selected
+    const chartData: { name: string; winRate: number; isCombo: boolean }[] = ATTR_KEYS.map((attr, i) => ({
+      name: attr,
+      winRate: Math.round(singleStats[i].winRate * 100),
+      isCombo: false,
+    }));
+    if (selectedAttrs.length >= 1) {
+      chartData.push({ name: "Combination ★", winRate: Math.round(comboWinRate * 100), isCombo: true });
+    }
+
+    // Top 10 matching launches by quality score
+    const topMatched = [...matched]
+      .sort((a, b) => b.launchQualityScore - a.launchQualityScore)
+      .slice(0, 10);
+
+    return { catLaunches, catWinRate, matched, comboWinRate, lift, med26w, singleStats, chartData, topMatched };
+  }, [selectedAttrs, explorerCat]);
+
+  function toggleAttr(attr: AttrKey) {
+    setSelectedAttrs(prev =>
+      prev.includes(attr) ? prev.filter(a => a !== attr) : [...prev, attr]
+    );
+  }
+
+  const liftColor = explorerData.lift >= 2
+    ? "text-green-600"
+    : explorerData.lift >= 1.5
+    ? "text-amber-600"
+    : "text-slate-700";
+  const winRateColor = explorerData.comboWinRate > explorerData.catWinRate
+    ? "text-green-600"
+    : "text-slate-700";
+
   return (
     <div className="max-w-7xl mx-auto space-y-5">
       {/* Filter bar */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-3">
         <span className="text-xs text-slate-500 font-medium">Category:</span>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {CATEGORIES.map((c) => (
             <button
               key={c}
@@ -194,6 +276,207 @@ export default function WinnerDNA() {
             </table>
           </div>
         </div>
+      </div>
+
+      {/* ── Attribute Combination Explorer ── */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5">
+        {/* Header row */}
+        <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <ListFilter size={14} className="text-blue-500 shrink-0" />
+            <div>
+              <h2 className="text-sm font-semibold text-slate-700">Attribute Combination Explorer</h2>
+              <p className="text-xs text-slate-400">
+                Select attributes to see how combinations compound win rates vs. individual attributes
+              </p>
+            </div>
+          </div>
+          {/* Explorer category pills */}
+          <div className="flex gap-1.5 flex-wrap">
+            {CATEGORIES.map(c => (
+              <button
+                key={c}
+                onClick={() => setExplorerCat(c)}
+                className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                  explorerCat === c
+                    ? "bg-blue-600 text-white"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Attribute toggle pills */}
+        <div className="flex gap-2 flex-wrap mb-4">
+          {ATTR_KEYS.map(attr => (
+            <button
+              key={attr}
+              onClick={() => toggleAttr(attr)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                selectedAttrs.includes(attr)
+                  ? "bg-blue-600 text-white border-blue-600"
+                  : "bg-white text-slate-600 border-slate-200 hover:border-blue-300 hover:text-blue-600"
+              }`}
+            >
+              {attr}
+            </button>
+          ))}
+          {selectedAttrs.length > 0 && (
+            <button
+              onClick={() => setSelectedAttrs([])}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-600 border border-slate-200 hover:border-slate-300 transition-colors"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
+        {selectedAttrs.length === 0 ? (
+          /* Empty state */
+          <div className="flex flex-col items-center justify-center h-36 text-slate-400 text-sm gap-2">
+            <ListFilter size={20} className="opacity-30" />
+            <span>Select one or more attributes above to explore how combinations affect win rates</span>
+          </div>
+        ) : (
+          <>
+            {/* KPI strip */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+              <div className="bg-slate-50 rounded-lg p-3">
+                <div className="text-[10px] text-slate-400 uppercase tracking-wide mb-0.5">Matching Launches</div>
+                <div className="text-xl font-bold text-slate-700 leading-tight">
+                  {explorerData.matched.length}
+                  <span className="text-xs font-normal text-slate-400 ml-1">/ {explorerData.catLaunches.length}</span>
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5">in {explorerCat}</div>
+              </div>
+              <div className="bg-slate-50 rounded-lg p-3">
+                <div className="text-[10px] text-slate-400 uppercase tracking-wide mb-0.5">Win Rate</div>
+                <div className={`text-xl font-bold leading-tight ${winRateColor}`}>
+                  {Math.round(explorerData.comboWinRate * 100)}%
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5">
+                  baseline {Math.round(explorerData.catWinRate * 100)}%
+                </div>
+              </div>
+              <div className="bg-slate-50 rounded-lg p-3">
+                <div className="text-[10px] text-slate-400 uppercase tracking-wide mb-0.5">Lift vs. Baseline</div>
+                <div className={`text-xl font-bold leading-tight ${liftColor}`}>
+                  {explorerData.lift.toFixed(1)}×
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5">
+                  {selectedAttrs.length} attribute{selectedAttrs.length > 1 ? "s" : ""} combined
+                </div>
+              </div>
+              <div className="bg-slate-50 rounded-lg p-3">
+                <div className="text-[10px] text-slate-400 uppercase tracking-wide mb-0.5">Median $26w</div>
+                <div className="text-xl font-bold text-slate-700 leading-tight">
+                  {fmt$(explorerData.med26w)}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5">for matching launches</div>
+              </div>
+            </div>
+
+            {/* Comparison chart + matching launches */}
+            <div className="grid grid-cols-1 xl:grid-cols-5 gap-5">
+              {/* Horizontal bar chart: single attrs vs. combination */}
+              <div className="xl:col-span-3">
+                <p className="text-xs text-slate-500 font-medium mb-2">
+                  Win rate comparison — individual attributes vs. combination
+                  <span className="ml-1 text-slate-400 font-normal">(dashed = category baseline)</span>
+                </p>
+                <ResponsiveContainer width="100%" height={240}>
+                  <BarChart
+                    data={explorerData.chartData}
+                    layout="vertical"
+                    margin={{ left: 8, right: 44, top: 0, bottom: 0 }}
+                  >
+                    <XAxis
+                      type="number"
+                      tickFormatter={(v) => `${v}%`}
+                      tick={{ fontSize: 10 }}
+                      axisLine={false}
+                      tickLine={false}
+                      domain={[0, 100]}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      tick={{ fontSize: 11 }}
+                      width={100}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip
+                      formatter={(v: any) => [`${v}%`, "Win Rate"]}
+                      contentStyle={{ fontSize: 11, border: "1px solid #e2e8f0" }}
+                    />
+                    <ReferenceLine
+                      x={Math.round(explorerData.catWinRate * 100)}
+                      stroke="#94a3b8"
+                      strokeDasharray="4 3"
+                      label={{
+                        value: "baseline",
+                        position: "insideTopRight",
+                        fontSize: 9,
+                        fill: "#94a3b8",
+                      }}
+                    />
+                    <Bar dataKey="winRate" radius={[0, 4, 4, 0]}>
+                      {explorerData.chartData.map((d, idx) => (
+                        <Cell
+                          key={idx}
+                          fill={d.isCombo ? "#2563eb" : "#cbd5e1"}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Matching launches list */}
+              <div className="xl:col-span-2">
+                <p className="text-xs text-slate-500 font-medium mb-2">
+                  Matching launches — top by quality score
+                </p>
+                {explorerData.matched.length === 0 ? (
+                  <div className="text-xs text-slate-400 italic">
+                    No launches match this combination in {explorerCat}.
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                    {explorerData.topMatched.map(l => (
+                      <div
+                        key={l.upc}
+                        className="flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors"
+                      >
+                        <div className="min-w-0">
+                          <div className="text-xs font-medium text-slate-700 truncate leading-tight">
+                            {l.description}
+                          </div>
+                          <div className="text-[10px] text-slate-400 leading-tight">{l.brand}</div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${scoreBg(l.launchQualityScore)}`}>
+                            {l.launchQualityScore}
+                          </span>
+                          {l.dollars26w != null && (
+                            <span className="text-[10px] text-slate-500">{fmt$(l.dollars26w)}</span>
+                          )}
+                          {l.survived26w && (
+                            <span className="text-[10px] text-green-600 font-semibold">✓26w</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
