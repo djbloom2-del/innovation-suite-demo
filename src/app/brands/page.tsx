@@ -50,7 +50,7 @@ export default function BrandGrowthEngine() {
 
   const scoreCards = [
     { icon: TrendingUp, label: "Total $ Growth", value: fmtPct(growthPct, 1), color: growthPct > 0 ? "text-green-600" : "text-red-500", bg: "bg-green-50" },
-    { icon: Rocket, label: "From New Items", value: fmtPct(brand.pctGrowthFromNewItems, 0), color: "text-blue-600", bg: "bg-blue-50" },
+    { icon: Rocket, label: "New Item Share", value: fmtPct(brand.pctGrowthFromNewItems, 0), color: "text-blue-600", bg: "bg-blue-50" },
     { icon: Trophy, label: "Win Rate", value: fmtPct(brand.winRate, 0), color: "text-amber-600", bg: "bg-amber-50" },
     { icon: Zap, label: "$ per Launch", value: fmt$(brand.innovationScore), color: "text-purple-600", bg: "bg-purple-50" },
   ];
@@ -184,7 +184,7 @@ export default function BrandGrowthEngine() {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-slate-100">
-                {["Brand", "Company", "Total $", "New Item $", "% from Innovation", "Launches", "Win Rate", "$/Launch"].map((h) => (
+                {["Brand", "Company", "Total $", "New Item $", "New Item Share", "Launches", "Win Rate", "$/Launch"].map((h) => (
                   <th key={h} className="text-left pb-2 text-slate-400 font-medium pr-4 whitespace-nowrap">{h}</th>
                 ))}
               </tr>

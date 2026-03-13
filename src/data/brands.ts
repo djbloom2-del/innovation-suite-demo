@@ -12,7 +12,6 @@ function buildBrand(
   // Use annual run-rate (velocity × stores × 52) so new-item dollars are comparable to coreDollars scale
   const newItemDollars = launches.reduce((s, l) => s + l.velocityLatest * l.storesSellingLatest * 52, 0);
   const totalDollars = coreDollars + newItemDollars;
-  const totalGrowth = totalDollars - priorTotal;
   const winners = launches.filter((l) => l.launchQualityScore >= 70);
 
   return {
@@ -23,7 +22,8 @@ function buildBrand(
     coreDollars,
     newItemDollars,
     totalDollarsPrior: priorTotal,
-    pctGrowthFromNewItems: totalGrowth > 0 ? Math.min(newItemDollars / totalGrowth, 1.5) : 0,
+    // new-item revenue share: what % of total sales come from innovation (always 0–100%)
+    pctGrowthFromNewItems: newItemDollars / (totalDollars || 1),
     launchCount: launches.length,
     winnerCount: winners.length,
     winRate: launches.length > 0 ? winners.length / launches.length : 0,
