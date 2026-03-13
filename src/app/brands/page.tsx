@@ -135,7 +135,7 @@ export default function BrandGrowthEngine() {
           <ResponsiveContainer width="100%" height={220}>
             <ScatterChart margin={{ top: 8, right: 16, bottom: 16, left: -8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="x" name="Launches" tick={{ fontSize: 10 }} label={{ value: "# Launches", position: "insideBottom", offset: -4, fontSize: 10 }} />
+              <XAxis dataKey="x" name="Launches" type="number" allowDecimals={false} tick={{ fontSize: 10 }} label={{ value: "# Launches", position: "insideBottom", offset: -4, fontSize: 10 }} />
               <YAxis dataKey="y" name="Win Rate" tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}%`} label={{ value: "Win Rate", angle: -90, position: "insideLeft", offset: 12, fontSize: 10 }} />
               <ZAxis dataKey="z" range={[30, 300]} />
               <Tooltip
