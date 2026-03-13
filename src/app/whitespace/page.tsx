@@ -7,7 +7,8 @@ import {
 } from "@/data/whitespace";
 import { getRisingUnderpenetrated, ATTRIBUTE_PERFORMANCE } from "@/data/attributes";
 import { CATEGORY_BENCHMARKS, CATEGORIES } from "@/data/categories";
-import type { WhitespaceOpportunity } from "@/lib/types";
+import { LAUNCHES, getWinners } from "@/data/launches";
+import type { WhitespaceOpportunity, AttributePerf, Category, Launch } from "@/lib/types";
 import {
   ScatterChart,
   Scatter,
@@ -19,73 +20,124 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-import { fmt$, fmtPct, categoryColor } from "@/lib/utils";
-import { Lightbulb, TrendingUp, Target, LayoutGrid } from "lucide-react";
+import { fmt$, fmtPct, categoryColor, scoreBg } from "@/lib/utils";
+import { Lightbulb, TrendingUp, Target, Layers } from "lucide-react";
 
-// ─── Module-scope constants ──────────────────────────────────────────────────
+// ─── Module-scope constants ───────────────────────────────────────────────────
 
-const HEATMAP_ATTRS = ["Non-GMO", "Gluten-Free", "Protein", "Organic", "Vegan", "Keto"] as const;
+const COMBO_ATTR_KEYS = ["Organic", "Non-GMO", "Gluten-Free", "Vegan", "Keto", "Protein"] as const;
+type AttrKey = typeof COMBO_ATTR_KEYS[number];
 
 const QUADRANT_LABELS = [
-  { x: 2.5, y: 28, text: "Open & Growing", color: "#16a34a", desc: "Best Whitespace" },
-  { x: 7.5, y: 28, text: "Crowded & Growing", color: "#d97706", desc: "Competitive" },
-  { x: 2.5, y: 8, text: "Open & Declining", color: "#6b7280", desc: "Niche" },
-  { x: 7.5, y: 8, text: "Crowded & Declining", color: "#dc2626", desc: "Avoid" },
+  { x: 2.5, y: 28, text: "Open & Growing",     color: "#16a34a", desc: "Best Whitespace" },
+  { x: 7.5, y: 28, text: "Crowded & Growing",  color: "#d97706", desc: "Competitive" },
+  { x: 2.5, y: 8,  text: "Open & Declining",   color: "#6b7280", desc: "Niche" },
+  { x: 7.5, y: 8,  text: "Crowded & Declining",color: "#dc2626", desc: "Avoid" },
 ];
+
+// ─── Module-scope helpers ─────────────────────────────────────────────────────
 
 function computePrize(opp: WhitespaceOpportunity): number {
   const b = CATEGORY_BENCHMARKS.find((bm) => bm.category === opp.category)!;
-  const additionalLaunches = Math.max(
-    1,
-    Math.round(b.launchCountLast12m * (0.5 - opp.penetrationRate))
-  );
-  const medianRevenue = b.medianVelocity26w * b.medianTdp12w * 26;
-  return additionalLaunches * opp.winRate * medianRevenue;
+  const additionalLaunches = Math.max(1, Math.round(b.launchCountLast12m * (0.5 - opp.penetrationRate)));
+  return additionalLaunches * opp.winRate * b.medianVelocity26w * b.medianTdp12w * 26;
 }
 
-function WhitespaceBadge({ score }: { score: number }) {
-  const color =
-    score >= 85
-      ? "bg-green-100 text-green-700"
-      : score >= 75
-      ? "bg-blue-100 text-blue-700"
-      : "bg-amber-100 text-amber-700";
-  return (
-    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${color}`}>
-      {score}
-    </span>
-  );
+function computeAttrPrize(category: string, winRate: number, penetrationRate: number): number {
+  const b = CATEGORY_BENCHMARKS.find((bm) => bm.category === category)!;
+  const add = Math.max(1, Math.round(b.launchCountLast12m * (0.5 - penetrationRate)));
+  return add * winRate * b.medianVelocity26w * b.medianTdp12w * 26;
+}
+
+function opportunityScore(winRate: number, penetrationRate: number, overindex: number, trend: string): number {
+  const t = trend === "rising" ? 1.2 : trend === "declining" ? 0.8 : 1.0;
+  return Math.round(winRate * (1 - penetrationRate) * overindex * t * 100);
+}
+
+function launchMatchesAttr(l: Launch, attrName: string, attrValue: string): boolean {
+  const a = l.attributes;
+  if (attrName === "Organic")               return a.isOrganic;
+  if (attrName === "Non-GMO")               return a.isNonGmo;
+  if (attrName === "Gluten-Free")           return a.isGlutenFree;
+  if (attrName === "Vegan")                 return a.isVegan;
+  if (attrName === "Keto")                  return a.isKeto;
+  if (attrName === "Protein")               return a.isProteinFocused;
+  if (attrName === "Form")                  return a.form === attrValue;
+  if (attrName === "Functional Ingredient") return a.functionalIngredient === attrValue;
+  if (attrName === "Health Focus")          return a.healthFocus === attrValue;
+  return false;
+}
+
+function genBriefDescription(attr: AttributePerf): string {
+  const wr  = Math.round(attr.winRate * 100);
+  const pen = Math.round(attr.penetrationRate * 100);
+  const oi  = attr.overindexVsAll.toFixed(1);
+  const phrases: Record<string, string> = {
+    Organic:      "Organic",
+    "Non-GMO":    "Non-GMO",
+    "Gluten-Free":"Gluten-Free",
+    Vegan:        "Vegan",
+    Keto:         "Keto-friendly",
+    Protein:      "Protein-focused",
+  };
+  const phrase = phrases[attr.attributeName] ?? attr.attributeName;
+  const trend = attr.trend === "rising" ? " Adoption is accelerating." : "";
+  return `${phrase} ${attr.category} launches win at ${wr}% but only ${pen}% of launches carry this claim — ${oi}× the category baseline.${trend}`;
+}
+
+function matchesComboAttr(l: Launch, attr: AttrKey): boolean {
+  const a = l.attributes;
+  if (attr === "Organic")      return a.isOrganic;
+  if (attr === "Non-GMO")      return a.isNonGmo;
+  if (attr === "Gluten-Free")  return a.isGlutenFree;
+  if (attr === "Vegan")        return a.isVegan;
+  if (attr === "Keto")         return a.isKeto;
+  if (attr === "Protein")      return a.isProteinFocused;
+  return false;
 }
 
 function trendColor(trend: string): string {
-  if (trend === "rising")   return "#16a34a";
+  if (trend === "rising")    return "#16a34a";
   if (trend === "declining") return "#dc2626";
   return "#2563eb";
 }
 
 function trendChipClass(trend: string): string {
-  if (trend === "rising")   return "bg-green-100 text-green-700";
+  if (trend === "rising")    return "bg-green-100 text-green-700";
   if (trend === "declining") return "bg-red-100 text-red-700";
   return "bg-blue-100 text-blue-700";
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
+// ─── Sub-components ────────────────────────────────────────────────────────────
+
+function WhitespaceBadge({ score }: { score: number }) {
+  const color =
+    score >= 85 ? "bg-green-100 text-green-700" :
+    score >= 75 ? "bg-blue-100 text-blue-700"   :
+                  "bg-amber-100 text-amber-700";
+  return (
+    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${color}`}>{score}</span>
+  );
+}
+
+// ─── Page Component ────────────────────────────────────────────────────────────
 
 export default function WhitespaceLab() {
-  // ── Section 1 data (unchanged) ──────────────────────────────────────────
-  const bubbleData  = useMemo(() => getWhitespaceBubbleData(), []);
-  const risingAttrs = useMemo(() => getRisingUnderpenetrated(), []);
-  const opportunities = WHITESPACE_OPPORTUNITIES.sort(
-    (a, b) => b.whitespaceScore - a.whitespaceScore
-  );
 
-  // ── State for new sections ───────────────────────────────────────────────
+  // ── Section 1 + 2 data ──────────────────────────────────────────────────
+  const bubbleData   = useMemo(() => getWhitespaceBubbleData(), []);
+  const risingAttrs  = useMemo(() => getRisingUnderpenetrated(), []);
+  const opportunities = [...WHITESPACE_OPPORTUNITIES].sort((a, b) => b.whitespaceScore - a.whitespaceScore);
+
+  // ── State ────────────────────────────────────────────────────────────────
   const [quadrantCat, setQuadrantCat] = useState<string>("All");
-  const [explorerCat, setExplorerCat] = useState<string>("All");
-  const [trendFilter, setTrendFilter] = useState<string>("All");
-  const [sortBy, setSortBy]           = useState<"winRate" | "penetrationGap" | "overindex">("winRate");
+  const [briefCat,    setBriefCat]    = useState<string>("All");
+  const [briefTrend,  setBriefTrend]  = useState<string>("All");
+  const [sortBriefs,  setSortBriefs]  = useState<"opportunity" | "winRate" | "prize">("opportunity");
+  const [comboAttrs,  setComboAttrs]  = useState<AttrKey[]>([]);
+  const [comboCat,    setComboCat]    = useState<Category>("Bars");
 
-  // ── useMemo: Attribute Quadrant Map ─────────────────────────────────────
+  // ── useMemo: quadrantData ────────────────────────────────────────────────
   const quadrantData = useMemo(() => {
     const attrs =
       quadrantCat === "All"
@@ -93,41 +145,23 @@ export default function WhitespaceLab() {
         : ATTRIBUTE_PERFORMANCE.filter((a) => a.category === quadrantCat);
 
     if (quadrantCat === "All") {
-      // Average across categories per unique attr:value pair
-      const map = new Map<
-        string,
-        { sumWr: number; sumPen: number; count: number; trend: string; overindex: number }
-      >();
+      const map = new Map<string, { sumWr: number; sumPen: number; count: number; trend: string; overindex: number }>();
       attrs.forEach((a) => {
         const key = `${a.attributeName}:${a.attributeValue}`;
         const ex  = map.get(key);
-        if (ex) {
-          ex.sumWr  += a.winRate;
-          ex.sumPen += a.penetrationRate;
-          ex.count  += 1;
-        } else {
-          map.set(key, {
-            sumWr:    a.winRate,
-            sumPen:   a.penetrationRate,
-            count:    1,
-            trend:    a.trend,
-            overindex: a.overindexVsAll,
-          });
-        }
+        if (ex) { ex.sumWr += a.winRate; ex.sumPen += a.penetrationRate; ex.count += 1; }
+        else    { map.set(key, { sumWr: a.winRate, sumPen: a.penetrationRate, count: 1, trend: a.trend, overindex: a.overindexVsAll }); }
       });
       return Array.from(map.entries()).map(([key, v]) => ({
-        name:            key.split(":")[1] ?? key,
-        label:           key.split(":")[0],
+        name:            key.split(":")[0],
         winRate:         v.sumWr  / v.count,
         penetrationRate: v.sumPen / v.count,
         trend:           v.trend,
         overindex:       v.overindex,
       }));
     }
-
     return attrs.map((a) => ({
-      name:            a.attributeValue,
-      label:           a.attributeName,
+      name:            a.attributeName,
       winRate:         a.winRate,
       penetrationRate: a.penetrationRate,
       trend:           a.trend,
@@ -135,43 +169,112 @@ export default function WhitespaceLab() {
     }));
   }, [quadrantCat]);
 
-  // ── useMemo: Heatmap lookup ──────────────────────────────────────────────
-  const heatmapLookup = useMemo(() => {
-    const map = new Map<string, Map<string, number>>();
-    ATTRIBUTE_PERFORMANCE.forEach((a) => {
-      const key = `${a.attributeName}:${a.attributeValue}`;
-      if (!map.has(key)) map.set(key, new Map());
-      map.get(key)!.set(a.category, a.winRate);
+  // ── useMemo: briefCards ──────────────────────────────────────────────────
+  const briefCards = useMemo(() => {
+    // 1. Featured: 5 hardcoded opportunities (non-boolean attributes)
+    const featured = opportunities.map((o) => {
+      const b    = CATEGORY_BENCHMARKS.find((bm) => bm.category === o.category)!;
+      const trend: "rising" | "stable" | "declining" =
+        o.growthSignal > 0.7 ? "rising" : o.growthSignal < 0.4 ? "declining" : "stable";
+      const overindex = b.winRate > 0 ? o.winRate / b.winRate : 1;
+      const examples  = LAUNCHES
+        .filter((l) => l.category === o.category && launchMatchesAttr(l, o.attributeName, o.attributeValue))
+        .sort((a, b) => b.launchQualityScore - a.launchQualityScore)
+        .slice(0, 2);
+      return {
+        id:              `${o.category}:${o.attributeName}:${o.attributeValue}`,
+        category:        o.category as string,
+        label:           o.attributeName,
+        name:            o.attributeValue,
+        description:     o.description,
+        winRate:         o.winRate,
+        penetrationRate: o.penetrationRate,
+        overindex,
+        trend,
+        score:           o.whitespaceScore,
+        prize:           computePrize(o),
+        isFeatured:      true,
+        examples,
+      };
     });
-    return map;
-  }, []);
 
-  // ── useMemo: Explorer results ────────────────────────────────────────────
-  const explorerResults = useMemo(() => {
-    let r = [...ATTRIBUTE_PERFORMANCE];
-    if (explorerCat !== "All")  r = r.filter((a) => a.category === explorerCat);
-    if (trendFilter !== "All")  r = r.filter((a) => a.trend === trendFilter.toLowerCase());
-    r.sort((a, b) => {
-      if (sortBy === "winRate")        return b.winRate - a.winRate;
-      if (sortBy === "penetrationGap") return a.penetrationRate - b.penetrationRate;
-      if (sortBy === "overindex")      return b.overindexVsAll - a.overindexVsAll;
+    // 2. Dynamic: from ATTRIBUTE_PERFORMANCE (boolean claims per category)
+    const dynamic = ATTRIBUTE_PERFORMANCE.map((attr) => {
+      const examples = LAUNCHES
+        .filter((l) => l.category === attr.category && launchMatchesAttr(l, attr.attributeName, attr.attributeValue))
+        .sort((a, b) => b.launchQualityScore - a.launchQualityScore)
+        .slice(0, 2);
+      return {
+        id:              `${attr.category}:${attr.attributeName}:${attr.attributeValue}`,
+        category:        attr.category as string,
+        label:           attr.attributeName,
+        name:            attr.attributeName,         // display attr name as title for boolean claims
+        description:     genBriefDescription(attr),
+        winRate:         attr.winRate,
+        penetrationRate: attr.penetrationRate,
+        overindex:       attr.overindexVsAll,
+        trend:           attr.trend as string,
+        score:           opportunityScore(attr.winRate, attr.penetrationRate, attr.overindexVsAll, attr.trend),
+        prize:           computeAttrPrize(attr.category, attr.winRate, attr.penetrationRate),
+        isFeatured:      false,
+        examples,
+      };
+    });
+
+    let combined = [...featured, ...dynamic];
+    if (briefCat   !== "All") combined = combined.filter((c) => c.category === briefCat);
+    if (briefTrend !== "All") combined = combined.filter((c) => c.trend === briefTrend.toLowerCase());
+
+    combined.sort((a, b) => {
+      if (sortBriefs === "opportunity") {
+        if (a.isFeatured && !b.isFeatured) return -1;
+        if (!a.isFeatured && b.isFeatured) return 1;
+        return b.score - a.score;
+      }
+      if (sortBriefs === "winRate") return b.winRate - a.winRate;
+      if (sortBriefs === "prize")   return b.prize - a.prize;
       return 0;
     });
-    return r.slice(0, 15);
-  }, [explorerCat, trendFilter, sortBy]);
+    return combined;
+  }, [briefCat, briefTrend, sortBriefs]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Pill helpers ──────────────────────────────────────────────────────────
+  // ── useMemo: comboData ───────────────────────────────────────────────────
+  const comboData = useMemo(() => {
+    const catLaunches = LAUNCHES.filter((l) => l.category === comboCat);
+    const catWinners  = getWinners(catLaunches);
+    const catWinRate  = catLaunches.length ? catWinners.length / catLaunches.length : 0;
+
+    const matched = comboAttrs.length === 0
+      ? catLaunches
+      : catLaunches.filter((l) => comboAttrs.every((a) => matchesComboAttr(l, a)));
+
+    const matchedWinners   = getWinners(matched);
+    const comboWinRate     = matched.length ? matchedWinners.length / matched.length : 0;
+    const comboPenetration = catLaunches.length ? matched.length / catLaunches.length : 0;
+    const lift             = catWinRate > 0 ? comboWinRate / catWinRate : 1;
+
+    const b         = CATEGORY_BENCHMARKS.find((bm) => bm.category === comboCat)!;
+    const addLaunch = Math.max(0, Math.round(b.launchCountLast12m * (0.5 - comboPenetration)));
+    const comboPrize = addLaunch * comboWinRate * b.medianVelocity26w * b.medianTdp12w * 26;
+
+    const topMatched = [...matched]
+      .sort((a, b) => b.launchQualityScore - a.launchQualityScore)
+      .slice(0, 5);
+
+    return { catLaunches, catWinRate, comboWinRate, comboPenetration, lift, comboPrize, topMatched };
+  }, [comboAttrs, comboCat]);
+
+  // ── Pill helper ──────────────────────────────────────────────────────────
   const pillCls = (active: boolean) =>
     `px-2.5 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors ${
-      active
-        ? "bg-blue-600 text-white"
-        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+      active ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
     }`;
 
+  // ────────────────────────────────────────────────────────────────────────
   return (
     <div className="max-w-7xl mx-auto space-y-5">
 
-      {/* ── Section 1: Category Whitespace Map + Attribute Gap Signals (unchanged) ── */}
+      {/* ── Section 1: Category Whitespace Map + Attribute Gap Signals ───── */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
         {/* Bubble chart */}
         <div className="xl:col-span-2 bg-white rounded-xl border border-slate-200 p-5">
@@ -183,24 +286,13 @@ export default function WhitespaceLab() {
             <ScatterChart margin={{ top: 20, right: 24, bottom: 24, left: -8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis
-                dataKey="crowding"
-                name="Crowding"
-                type="number"
-                domain={[0, 10]}
-                tick={{ fontSize: 10 }}
-                axisLine={false}
-                tickLine={false}
+                dataKey="crowding" name="Crowding" type="number" domain={[0, 10]}
+                tick={{ fontSize: 10 }} axisLine={false} tickLine={false}
                 label={{ value: "← Less Crowded   More Crowded →", position: "insideBottom", offset: -12, fontSize: 10, fill: "#94a3b8" }}
               />
               <YAxis
-                dataKey="growthRate"
-                name="Growth Rate"
-                type="number"
-                domain={[0, 35]}
-                tick={{ fontSize: 10 }}
-                tickFormatter={(v) => `${v}%`}
-                axisLine={false}
-                tickLine={false}
+                dataKey="growthRate" name="Growth Rate" type="number" domain={[0, 35]}
+                tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}%`} axisLine={false} tickLine={false}
                 label={{ value: "Growth Rate", angle: -90, position: "insideLeft", offset: 12, fontSize: 10, fill: "#94a3b8" }}
               />
               <ZAxis dataKey="totalDollars" range={[600, 3000]} />
@@ -253,9 +345,7 @@ export default function WhitespaceLab() {
         {/* Rising underpenetrated attributes */}
         <div className="bg-white rounded-xl border border-slate-200 p-5">
           <h2 className="text-sm font-semibold text-slate-700 mb-1">Attribute Gap Signals</h2>
-          <p className="text-xs text-slate-400 mb-4">
-            High win rate, low penetration — underserved demand
-          </p>
+          <p className="text-xs text-slate-400 mb-4">High win rate, low penetration — underserved demand</p>
           <div className="space-y-3">
             {risingAttrs.slice(0, 8).map((attr) => (
               <div key={`${attr.category}-${attr.attributeName}`} className="border border-slate-100 rounded-lg p-3">
@@ -277,10 +367,7 @@ export default function WhitespaceLab() {
                   </div>
                 </div>
                 <div className="mt-1.5 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-blue-500 rounded-full"
-                    style={{ width: `${attr.penetrationRate * 100}%` }}
-                  />
+                  <div className="h-full bg-blue-500 rounded-full" style={{ width: `${attr.penetrationRate * 100}%` }} />
                 </div>
                 <div className="text-[9px] text-slate-400 mt-0.5">{Math.round(attr.penetrationRate * 100)}% of launches feature this</div>
               </div>
@@ -289,51 +376,37 @@ export default function WhitespaceLab() {
         </div>
       </div>
 
-      {/* ── Section 2: Attribute Opportunity Quadrant Map ──────────────────── */}
+      {/* ── Section 2: Attribute Opportunity Quadrant ─────────────────────── */}
       <div className="bg-white rounded-xl border border-slate-200 p-5">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
             <h2 className="text-sm font-semibold text-slate-700">Attribute Opportunity Quadrant</h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              Win rate vs. penetration — top-left = highest opportunity (winning but underpenetrated)
+              Top-left = highest opportunity — winning but underpenetrated
             </p>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {["All", ...CATEGORIES].map((cat) => (
-              <button key={cat} onClick={() => setQuadrantCat(cat)} className={pillCls(quadrantCat === cat)}>
-                {cat}
-              </button>
+              <button key={cat} onClick={() => setQuadrantCat(cat)} className={pillCls(quadrantCat === cat)}>{cat}</button>
             ))}
           </div>
         </div>
-
-        <ResponsiveContainer width="100%" height={280}>
+        <ResponsiveContainer width="100%" height={260}>
           <ScatterChart margin={{ top: 10, right: 24, bottom: 28, left: 10 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
             <XAxis
-              dataKey="penetrationRate"
-              name="Penetration"
-              type="number"
-              domain={[0, 0.65]}
-              tick={{ fontSize: 10 }}
-              tickFormatter={(v) => `${Math.round(v * 100)}%`}
-              axisLine={false}
-              tickLine={false}
+              dataKey="penetrationRate" name="Penetration" type="number" domain={[0, 0.65]}
+              tick={{ fontSize: 10 }} tickFormatter={(v) => `${Math.round(v * 100)}%`}
+              axisLine={false} tickLine={false}
               label={{ value: "← Lower Penetration   Higher Penetration →", position: "insideBottom", offset: -14, fontSize: 10, fill: "#94a3b8" }}
             />
             <YAxis
-              dataKey="winRate"
-              name="Win Rate"
-              type="number"
-              domain={[0, 0.85]}
-              tick={{ fontSize: 10 }}
-              tickFormatter={(v) => `${Math.round(v * 100)}%`}
-              axisLine={false}
-              tickLine={false}
+              dataKey="winRate" name="Win Rate" type="number" domain={[0, 0.85]}
+              tick={{ fontSize: 10 }} tickFormatter={(v) => `${Math.round(v * 100)}%`}
+              axisLine={false} tickLine={false}
               label={{ value: "Win Rate", angle: -90, position: "insideLeft", offset: 10, fontSize: 10, fill: "#94a3b8" }}
             />
             <ZAxis range={[60, 60]} />
-            {/* Quadrant dividers */}
             <ReferenceLine x={0.3}  stroke="#e2e8f0" strokeDasharray="4 2" />
             <ReferenceLine y={0.35} stroke="#e2e8f0" strokeDasharray="4 2" />
             <Tooltip
@@ -343,8 +416,7 @@ export default function WhitespaceLab() {
                 return (
                   <div className="bg-white border border-slate-200 rounded-lg p-3 text-xs shadow-md">
                     <div className="font-semibold text-slate-800 mb-1">{d.name}</div>
-                    <div className="text-slate-500">{d.label}</div>
-                    <div className="text-slate-500 mt-1">Win Rate: {Math.round(d.winRate * 100)}%</div>
+                    <div className="text-slate-500">Win Rate: {Math.round(d.winRate * 100)}%</div>
                     <div className="text-slate-500">Penetration: {Math.round(d.penetrationRate * 100)}%</div>
                     <div className="text-slate-500">Overindex: {d.overindex.toFixed(1)}×</div>
                   </div>
@@ -359,19 +431,9 @@ export default function WhitespaceLab() {
                 const isHigh = payload.penetrationRate < 0.25 && payload.winRate > 0.5;
                 return (
                   <g>
-                    <circle
-                      cx={cx} cy={cy} r={isHigh ? 7 : 5}
-                      fill={color} fillOpacity={0.75}
-                      stroke={color} strokeWidth={isHigh ? 2 : 1}
-                    />
+                    <circle cx={cx} cy={cy} r={isHigh ? 7 : 5} fill={color} fillOpacity={0.75} stroke={color} strokeWidth={isHigh ? 2 : 1} />
                     {isHigh && (
-                      <text
-                        x={cx} y={cy - 10}
-                        textAnchor="middle"
-                        fontSize={9}
-                        fill="#1e293b"
-                        fontWeight={600}
-                      >
+                      <text x={cx} y={cy - 10} textAnchor="middle" fontSize={9} fill="#1e293b" fontWeight={600}>
                         {payload.name}
                       </text>
                     )}
@@ -381,17 +443,9 @@ export default function WhitespaceLab() {
             />
           </ScatterChart>
         </ResponsiveContainer>
-
-        {/* Quadrant corner labels */}
-        <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
-          <div className="text-[10px] font-semibold text-green-600">★ Top-left: High Win Rate + Low Penetration = Best Opportunity</div>
-          <div className="text-[10px] font-medium text-amber-600">Top-right: High Win Rate + High Penetration = Established</div>
-          <div className="text-[10px] font-medium text-slate-400">Bottom-left: Low Win Rate + Low Penetration = Monitor</div>
-          <div className="text-[10px] font-medium text-red-400">Bottom-right: Low Win Rate + High Penetration = Low Priority</div>
-        </div>
-
-        {/* Trend legend */}
-        <div className="mt-3 flex gap-4">
+        <div className="mt-2 flex gap-4 flex-wrap">
+          <div className="text-[10px] font-semibold text-green-600">★ Top-left: High Win + Low Penetration = Best Opportunity</div>
+          <div className="text-[10px] font-medium text-amber-600">Top-right: High Win + High Penetration = Established</div>
           {[
             { label: "Rising",   color: "#16a34a" },
             { label: "Stable",   color: "#2563eb" },
@@ -405,254 +459,271 @@ export default function WhitespaceLab() {
         </div>
       </div>
 
-      {/* ── Section 3: Interactive Whitespace Explorer ─────────────────────── */}
+      {/* ── Section 3: Opportunity Brief Gallery ──────────────────────────── */}
       <div className="bg-white rounded-xl border border-slate-200 p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <LayoutGrid size={15} className="text-blue-500" />
-          <h2 className="text-sm font-semibold text-slate-700">Whitespace Explorer</h2>
-        </div>
-
-        {/* Controls */}
-        <div className="flex flex-wrap gap-3 mb-4">
-          {/* Category pills */}
-          <div className="flex flex-wrap gap-1">
-            {["All", ...CATEGORIES].map((cat) => (
-              <button key={cat} onClick={() => setExplorerCat(cat)} className={pillCls(explorerCat === cat)}>
-                {cat}
-              </button>
-            ))}
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+          <div>
+            <div className="flex items-center gap-2 mb-0.5">
+              <Lightbulb size={15} className="text-amber-500" />
+              <h2 className="text-sm font-semibold text-slate-700">Innovation Opportunity Briefs</h2>
+            </div>
+            <p className="text-xs text-slate-400">
+              {briefCards.length} opportunit{briefCards.length === 1 ? "y" : "ies"} — filter and sort to find your own insights
+            </p>
           </div>
-          {/* Trend pills */}
-          <div className="flex flex-wrap gap-1">
-            {["All", "Rising", "Stable", "Declining"].map((t) => (
-              <button key={t} onClick={() => setTrendFilter(t)} className={pillCls(trendFilter === t)}>
-                {t}
-              </button>
-            ))}
-          </div>
-          {/* Sort selector */}
           <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as "winRate" | "penetrationGap" | "overindex")}
+            value={sortBriefs}
+            onChange={(e) => setSortBriefs(e.target.value as "opportunity" | "winRate" | "prize")}
             className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
           >
+            <option value="opportunity">Sort: Opportunity Score</option>
             <option value="winRate">Sort: Win Rate</option>
-            <option value="penetrationGap">Sort: Penetration Gap</option>
-            <option value="overindex">Sort: Overindex</option>
+            <option value="prize">Sort: Est. Prize</option>
           </select>
         </div>
 
-        {/* Results table */}
-        <div className="border border-slate-100 rounded-lg overflow-hidden">
-          {/* Header */}
-          <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-slate-50 border-b border-slate-100 text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
-            <div className="col-span-1">#</div>
-            <div className="col-span-4">Attribute</div>
-            <div className="col-span-3">Win Rate</div>
-            <div className="col-span-2">Penetration</div>
-            <div className="col-span-1 text-center">OI</div>
-            <div className="col-span-1 text-center">Trend</div>
+        {/* Filter pills */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          <div className="flex flex-wrap gap-1">
+            {["All", ...CATEGORIES].map((cat) => (
+              <button key={cat} onClick={() => setBriefCat(cat)} className={pillCls(briefCat === cat)}>{cat}</button>
+            ))}
           </div>
-          {explorerResults.length === 0 ? (
-            <div className="px-4 py-8 text-center text-xs text-slate-400">
-              No attributes match the current filters.
-            </div>
-          ) : (
-            explorerResults.map((attr, i) => {
-              const oiColor =
-                attr.overindexVsAll >= 2   ? "text-green-600" :
-                attr.overindexVsAll >= 1.5 ? "text-amber-600" : "text-slate-500";
-              return (
-                <div
-                  key={`${attr.category}-${attr.attributeName}-${attr.attributeValue}`}
-                  className="grid grid-cols-12 gap-2 px-3 py-2.5 border-b border-slate-50 hover:bg-slate-50 transition-colors items-center"
-                >
-                  {/* Rank */}
-                  <div className="col-span-1 text-[10px] text-slate-400">#{i + 1}</div>
-                  {/* Attribute */}
-                  <div className="col-span-4">
-                    <div className="text-xs font-semibold text-slate-700 leading-tight">{attr.attributeName}: {attr.attributeValue}</div>
-                    <span
-                      className="text-[9px] font-medium px-1.5 py-0.5 rounded-full text-white mt-0.5 inline-block"
-                      style={{ backgroundColor: categoryColor(attr.category) }}
-                    >
-                      {attr.category}
-                    </span>
-                  </div>
-                  {/* Win Rate */}
-                  <div className="col-span-3">
-                    <div className="text-xs font-bold text-green-600 mb-1">{Math.round(attr.winRate * 100)}%</div>
-                    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-green-400 rounded-full" style={{ width: `${attr.winRate * 100}%` }} />
-                    </div>
-                  </div>
-                  {/* Penetration */}
-                  <div className="col-span-2">
-                    <div className="text-xs font-semibold text-slate-600 mb-1">{Math.round(attr.penetrationRate * 100)}%</div>
-                    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-blue-400 rounded-full" style={{ width: `${attr.penetrationRate * 100}%` }} />
-                    </div>
-                  </div>
-                  {/* Overindex */}
-                  <div className={`col-span-1 text-center text-xs font-bold ${oiColor}`}>
-                    {attr.overindexVsAll.toFixed(1)}×
-                  </div>
-                  {/* Trend */}
-                  <div className="col-span-1 flex justify-center">
-                    <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full capitalize ${trendChipClass(attr.trend)}`}>
-                      {attr.trend.charAt(0).toUpperCase() + attr.trend.slice(1, 3)}
-                    </span>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-        <div className="mt-2 text-[10px] text-slate-400 text-right">
-          Showing {explorerResults.length} of {ATTRIBUTE_PERFORMANCE.length} attributes
-        </div>
-      </div>
-
-      {/* ── Section 4: Category × Attribute Heatmap ────────────────────────── */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5">
-        <div className="flex items-center gap-2 mb-1">
-          <Target size={14} className="text-slate-500" />
-          <h2 className="text-sm font-semibold text-slate-700">Win Rate by Category & Attribute</h2>
-        </div>
-        <p className="text-xs text-slate-400 mb-4">
-          Each cell = win rate for that attribute in that category. Green = high win rate, red = low.
-        </p>
-
-        <div className="overflow-x-auto">
-          <table className="w-full border-separate border-spacing-1 text-xs min-w-[480px]">
-            <thead>
-              <tr>
-                <th className="text-left text-[10px] text-slate-500 font-semibold py-1 px-2 w-32">Attribute</th>
-                {CATEGORIES.map((cat) => (
-                  <th
-                    key={cat}
-                    className="text-center text-[10px] font-semibold py-1 px-2"
-                    style={{ color: categoryColor(cat) }}
-                  >
-                    {cat}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {HEATMAP_ATTRS.map((attr) => (
-                <tr key={attr}>
-                  <td className="text-[11px] font-medium text-slate-600 py-1.5 px-2 whitespace-nowrap">{attr}</td>
-                  {CATEGORIES.map((cat) => {
-                    const v = heatmapLookup.get(`${attr}:true`)?.get(cat);
-                    const cellCls =
-                      v == null
-                        ? "bg-slate-50 text-slate-300"
-                        : v >= 0.6
-                        ? "bg-green-100 text-green-800"
-                        : v >= 0.45
-                        ? "bg-blue-100 text-blue-800"
-                        : v >= 0.3
-                        ? "bg-amber-50 text-amber-800"
-                        : "bg-red-50 text-red-800";
-                    return (
-                      <td
-                        key={cat}
-                        className={`text-center rounded-lg py-2 px-2 font-semibold text-[11px] ${cellCls}`}
-                      >
-                        {v != null ? `${Math.round(v * 100)}%` : "—"}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-              {/* Footer: category avg win rates */}
-              <tr className="border-t border-slate-100">
-                <td className="text-[10px] font-bold text-slate-500 py-1.5 px-2 pt-3">Cat. Avg</td>
-                {CATEGORIES.map((cat) => {
-                  const b = CATEGORY_BENCHMARKS.find((bm) => bm.category === cat)!;
-                  return (
-                    <td key={cat} className="text-center bg-slate-100 rounded-lg py-2 px-2 text-[11px] font-bold text-slate-600">
-                      {Math.round(b.winRate * 100)}%
-                    </td>
-                  );
-                })}
-              </tr>
-            </tbody>
-          </table>
+          <div className="flex flex-wrap gap-1">
+            {["All", "Rising", "Stable", "Declining"].map((t) => (
+              <button key={t} onClick={() => setBriefTrend(t)} className={pillCls(briefTrend === t)}>{t}</button>
+            ))}
+          </div>
         </div>
 
-        <div className="mt-3 flex gap-4 flex-wrap">
-          {[
-            { label: "≥60% win rate",  cls: "bg-green-100 text-green-800" },
-            { label: "45–59%",          cls: "bg-blue-100 text-blue-800" },
-            { label: "30–44%",          cls: "bg-amber-50 text-amber-800" },
-            { label: "<30%",            cls: "bg-red-50 text-red-800" },
-            { label: "No data",         cls: "bg-slate-50 text-slate-400" },
-          ].map(({ label, cls }) => (
-            <div key={label} className="flex items-center gap-1.5 text-[10px] text-slate-500">
-              <div className={`w-5 h-3 rounded text-center text-[8px] font-bold leading-3 ${cls}`} />
-              {label}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Section 5: Innovation Opportunity Briefs (with Est. Prize) ────── */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <Lightbulb size={15} className="text-amber-500" />
-          <h2 className="text-sm font-semibold text-slate-700">Innovation Opportunity Briefs</h2>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {opportunities.map((opp) => (
-            <div
-              key={`${opp.category}-${opp.attributeValue}`}
-              className="border border-slate-100 rounded-xl p-4 hover:border-blue-200 hover:shadow-sm transition-all"
-            >
-              <div className="flex items-start justify-between gap-2 mb-3">
-                <div>
-                  <div className="flex items-center gap-1.5 mb-0.5">
+        {/* Brief card grid */}
+        {briefCards.length === 0 ? (
+          <div className="py-12 text-center text-xs text-slate-400">No opportunities match the current filters.</div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {briefCards.map((card) => (
+              <div
+                key={card.id}
+                className="border border-slate-100 rounded-xl p-4 hover:border-blue-200 hover:shadow-sm transition-all flex flex-col"
+              >
+                {/* Card header */}
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <span
                       className="text-[10px] font-medium px-2 py-0.5 rounded-full text-white"
-                      style={{ backgroundColor: categoryColor(opp.category) }}
+                      style={{ backgroundColor: categoryColor(card.category) }}
                     >
-                      {opp.category}
+                      {card.category}
+                    </span>
+                    {card.isFeatured && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">★ Featured</span>
+                    )}
+                    <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full ${trendChipClass(card.trend)}`}>
+                      {card.trend.charAt(0).toUpperCase() + card.trend.slice(1)}
                     </span>
                   </div>
-                  <div className="text-sm font-bold text-slate-800 mt-1">
-                    {opp.attributeValue}
+                  <WhitespaceBadge score={card.score} />
+                </div>
+
+                {/* Name + label */}
+                <div className="mb-2">
+                  <div className="text-sm font-bold text-slate-800 leading-tight">{card.name}</div>
+                  <div className="text-[10px] text-slate-400">{card.label}</div>
+                </div>
+
+                {/* Description */}
+                <p className="text-xs text-slate-600 leading-relaxed mb-3 flex-1">{card.description}</p>
+
+                {/* Stats row */}
+                <div className="grid grid-cols-4 gap-1 pt-3 border-t border-slate-50 mb-3">
+                  <div className="text-center">
+                    <div className="text-xs font-bold text-green-600">{Math.round(card.winRate * 100)}%</div>
+                    <div className="text-[9px] text-slate-400">Win Rate</div>
                   </div>
-                  <div className="text-[10px] text-slate-400">{opp.attributeName}</div>
+                  <div className="text-center">
+                    <div className="text-xs font-bold text-slate-700">{Math.round(card.penetrationRate * 100)}%</div>
+                    <div className="text-[9px] text-slate-400">Penetration</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xs font-bold text-blue-600">{card.overindex.toFixed(1)}×</div>
+                    <div className="text-[9px] text-slate-400">Overindex</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xs font-bold text-purple-600">{fmt$(card.prize)}</div>
+                    <div className="text-[9px] text-slate-400">Est. Prize</div>
+                  </div>
                 </div>
-                <WhitespaceBadge score={opp.whitespaceScore} />
-              </div>
 
-              <p className="text-xs text-slate-600 leading-relaxed mb-3">{opp.description}</p>
-
-              {/* 4-column stat grid (was 3) */}
-              <div className="grid grid-cols-4 gap-1 pt-3 border-t border-slate-50">
-                <div className="text-center">
-                  <div className="text-xs font-bold text-green-600">{fmtPct(opp.winRate, 0)}</div>
-                  <div className="text-[9px] text-slate-400">Win Rate</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-xs font-bold text-slate-700">{fmtPct(opp.penetrationRate, 0)}</div>
-                  <div className="text-[9px] text-slate-400">Penetration</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-xs font-bold text-blue-600">{Math.round(opp.growthSignal * 100)}%</div>
-                  <div className="text-[9px] text-slate-400">Growth Signal</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-xs font-bold text-purple-600">{fmt$(computePrize(opp))}</div>
-                  <div className="text-[9px] text-slate-400">Est. Prize</div>
-                </div>
+                {/* Example launches */}
+                {card.examples.length > 0 && (
+                  <div>
+                    <div className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Example Launches</div>
+                    <div className="space-y-1">
+                      {card.examples.map((ex) => (
+                        <div key={ex.upc} className="flex items-center gap-2 text-[10px]">
+                          <span className="text-slate-600 truncate flex-1">{ex.description}</span>
+                          <span className={`shrink-0 text-[9px] font-bold px-1 py-0.5 rounded border ${scoreBg(ex.launchQualityScore)}`}>
+                            {ex.launchQualityScore}
+                          </span>
+                          {ex.survived26w && (
+                            <span className="shrink-0 text-green-600 font-bold">✓</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Section 4: Attribute Combo Whitespace Finder ─────────────────── */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5">
+        <div className="flex items-center gap-2 mb-1">
+          <Layers size={15} className="text-blue-500" />
+          <h2 className="text-sm font-semibold text-slate-700">Attribute Combo Whitespace Finder</h2>
+        </div>
+        <p className="text-xs text-slate-400 mb-4">
+          Combine attributes to reveal compound whitespace opportunities — low penetration + high win rate = biggest prize
+        </p>
+
+        {/* Category pills */}
+        <div className="flex flex-wrap gap-1.5 mb-4">
+          {CATEGORIES.map((cat) => (
+            <button key={cat} onClick={() => setComboCat(cat)} className={pillCls(comboCat === cat)}>{cat}</button>
           ))}
         </div>
+
+        {/* Attribute toggle pills */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          {COMBO_ATTR_KEYS.map((attr) => {
+            const active = comboAttrs.includes(attr);
+            return (
+              <button
+                key={attr}
+                onClick={() =>
+                  setComboAttrs((prev) =>
+                    active ? prev.filter((a) => a !== attr) : [...prev, attr]
+                  )
+                }
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold cursor-pointer transition-all border ${
+                  active
+                    ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                    : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"
+                }`}
+              >
+                {attr}
+              </button>
+            );
+          })}
+          {comboAttrs.length > 0 && (
+            <button
+              onClick={() => setComboAttrs([])}
+              className="px-3 py-1.5 rounded-full text-xs font-medium text-slate-400 hover:text-slate-600 border border-slate-200 hover:border-slate-300 transition-colors"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
+        {comboAttrs.length === 0 ? (
+          <div className="py-10 text-center text-xs text-slate-400">
+            Select 2+ attributes above to explore how combinations create whitespace opportunities.
+          </div>
+        ) : (
+          <>
+            {/* KPI strip */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+              {/* Combo Penetration — low = more whitespace */}
+              <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
+                <div className={`text-xl font-bold ${comboData.comboPenetration < 0.2 ? "text-amber-600" : "text-slate-700"}`}>
+                  {Math.round(comboData.comboPenetration * 100)}%
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5">Combo Penetration</div>
+                {comboData.comboPenetration < 0.2 && (
+                  <div className="text-[9px] text-amber-600 font-medium mt-0.5">↓ Low = more whitespace</div>
+                )}
+              </div>
+              {/* Win Rate */}
+              <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
+                <div className={`text-xl font-bold ${comboData.comboWinRate > comboData.catWinRate ? "text-green-600" : "text-slate-500"}`}>
+                  {Math.round(comboData.comboWinRate * 100)}%
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5">Combo Win Rate</div>
+                <div className="text-[9px] text-slate-400 mt-0.5">
+                  vs. {Math.round(comboData.catWinRate * 100)}% baseline
+                </div>
+              </div>
+              {/* Lift */}
+              <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
+                <div className={`text-xl font-bold ${
+                  comboData.lift >= 2 ? "text-green-600" :
+                  comboData.lift >= 1.5 ? "text-amber-600" : "text-slate-500"
+                }`}>
+                  {comboData.lift.toFixed(1)}×
+                </div>
+                <div className="text-[10px] text-slate-400 mt-0.5">Lift vs. Baseline</div>
+              </div>
+              {/* Est. Prize */}
+              <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
+                <div className="text-xl font-bold text-purple-600">{fmt$(comboData.comboPrize)}</div>
+                <div className="text-[10px] text-slate-400 mt-0.5">Est. Prize</div>
+              </div>
+            </div>
+
+            {/* Insight narrative */}
+            <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-4">
+              <div className="flex items-start gap-2">
+                <Target size={14} className="text-blue-500 shrink-0 mt-0.5" />
+                <p className="text-xs text-blue-800 leading-relaxed">
+                  <span className="font-semibold">{comboAttrs.join(" + ")} in {comboCat}:</span>{" "}
+                  wins at {Math.round(comboData.comboWinRate * 100)}% but only{" "}
+                  {Math.round(comboData.comboPenetration * 100)}% of {comboCat} launches carry this
+                  combination — {comboData.lift.toFixed(1)}× the category baseline.{" "}
+                  {comboData.comboPrize > 0
+                    ? `Est. ${fmt$(comboData.comboPrize)} opportunity if penetration reaches 50%.`
+                    : "Already well-penetrated in this category."}
+                </p>
+              </div>
+            </div>
+
+            {/* Matching launches */}
+            {comboData.topMatched.length > 0 ? (
+              <div>
+                <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                  Top Matching Launches ({comboData.topMatched.length} shown)
+                </div>
+                <div className="space-y-1.5">
+                  {comboData.topMatched.map((l) => (
+                    <div key={l.upc} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-semibold text-slate-700 truncate">{l.description}</div>
+                        <div className="text-[10px] text-slate-400">{l.brand}</div>
+                      </div>
+                      <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded border ${scoreBg(l.launchQualityScore)}`}>
+                        {l.launchQualityScore}
+                      </span>
+                      {l.dollars26w != null && (
+                        <span className="text-[10px] text-slate-500 shrink-0">{fmt$(l.dollars26w)}</span>
+                      )}
+                      {l.survived26w && (
+                        <span className="text-green-600 font-bold text-xs shrink-0">✓</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="py-6 text-center text-xs text-slate-400">
+                No {comboCat} launches match this combination.
+              </div>
+            )}
+          </>
+        )}
       </div>
+
     </div>
   );
 }
