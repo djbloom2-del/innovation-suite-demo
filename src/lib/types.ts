@@ -37,6 +37,7 @@ export interface Launch {
   tdpLatest: number; // total distribution points
   storesSellingLatest: number;
   priceLatest: number;
+  basePrice: number;      // everyday non-promoted shelf price (>= priceLatest)
   promoDependency: number; // 0–1
   baseMix: number; // 0–1
   priceIndexVsCategory: number; // 1.0 = at category avg

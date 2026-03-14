@@ -113,6 +113,10 @@ function buildLaunch(spec: LaunchSpec, peers: Launch[] = []): Launch {
     survivalScore * 100 * 0.1
   );
 
+  // basePrice: separate RNG so existing r() call sequence is completely untouched
+  const r2 = rng(parseInt(spec.upc.slice(-4)) + 7777);
+  const basePrice = spec.priceLatest * (1 + Math.max(0, spec.promoMix) * (0.12 + r2() * 0.18));
+
   // Retailer channel — separate seed so existing RNG sequence is unaffected
   const rRetailer = rng(parseInt(spec.upc.slice(-4)) * 31337);
   const rv = rRetailer();
@@ -143,6 +147,7 @@ function buildLaunch(spec: LaunchSpec, peers: Launch[] = []): Launch {
     tdpLatest,
     storesSellingLatest,
     priceLatest: spec.priceLatest,
+    basePrice,
     promoDependency: spec.promoMix * (0.85 + r() * 0.3),
     baseMix,
     priceIndexVsCategory: 0.88 + r() * 0.35,

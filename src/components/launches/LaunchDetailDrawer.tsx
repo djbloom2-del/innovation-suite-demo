@@ -18,7 +18,8 @@ import {
   Legend,
 } from "recharts";
 import { X, SearchCode } from "lucide-react";
-import { fmt$, fmtN, fmtPct, fmtGrowth, growthColor, categoryColor } from "@/lib/utils";
+import { fmt$, fmtN, fmtPct, fmtGrowth, categoryColor, getDollarPerTdp, getCategoryTier, getPromoDepth, getGrowthContribution } from "@/lib/utils";
+import { LAUNCHES } from "@/data/launches";
 import Link from "next/link";
 
 interface Props {
@@ -56,6 +57,21 @@ function buildRedditQuery(l: Launch): string {
 export function LaunchDetailDrawer({ launch: l, onClose }: Props) {
   const series = getTimeSeries(l.upc);
   const bench = getBenchmark(l.category);
+
+  const dollarPerTdp = getDollarPerTdp(l);
+  const tier = getCategoryTier(l, LAUNCHES);
+  const promoDepth = getPromoDepth(l);
+  const growthContrib = getGrowthContribution(l, bench.growthRate);
+  const tierColors =
+    tier === "Top Third"
+      ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+      : tier === "Mid Third"
+      ? "text-amber-700 bg-amber-50 border-amber-200"
+      : "text-slate-600 bg-slate-50 border-slate-200";
+
+  const promoPrice = l.baseMix > 0 && l.promoDependency > 0
+    ? Math.max(0, Math.min(l.basePrice, (l.priceLatest - l.basePrice * l.baseMix) / l.promoDependency))
+    : null;
 
   const chartData = series.map((p) => ({
     week: p.ageWeeks,
@@ -179,6 +195,106 @@ export function LaunchDetailDrawer({ launch: l, onClose }: Props) {
             </div>
           </div>
 
+          {/* Competitive Position */}
+          <div>
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+              Competitive Position
+            </div>
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              <div className="bg-slate-50 rounded-lg p-2.5 text-center">
+                <div className="text-xs font-semibold text-slate-700">${dollarPerTdp.toFixed(2)}</div>
+                <div className="text-[9px] text-slate-400 mt-0.5">$ per TDP</div>
+              </div>
+              <div className={`rounded-lg p-2.5 text-center border ${tierColors}`}>
+                <div className="text-xs font-semibold">{tier}</div>
+                <div className="text-[9px] mt-0.5 opacity-70">Category Tier</div>
+              </div>
+            </div>
+            <div className="space-y-2 mb-2">
+              <div className="text-[10px] font-medium text-slate-500 mb-1">12w Growth vs. Category</div>
+              {(() => {
+                const itemGrowth = l.growthRate12w ?? 0;
+                const catGrowth = bench.growthRate;
+                const maxGrowth = Math.max(Math.abs(itemGrowth), Math.abs(catGrowth), 0.01);
+                const itemPct = Math.min(Math.abs(itemGrowth) / maxGrowth * 100, 100);
+                const catPct = Math.min(Math.abs(catGrowth) / maxGrowth * 100, 100);
+                const itemBarColor = itemGrowth >= 0 ? "#16a34a" : "#ef4444";
+                return (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-slate-500 w-16 shrink-0">This Item</span>
+                      <div className="flex-1 bg-slate-100 rounded-full h-2 overflow-hidden">
+                        <div className="h-2 rounded-full" style={{ width: `${itemPct}%`, backgroundColor: itemBarColor }} />
+                      </div>
+                      <span className="text-[10px] font-semibold text-slate-700 w-12 text-right">{fmtGrowth(l.growthRate12w)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-slate-500 w-16 shrink-0">Category</span>
+                      <div className="flex-1 bg-slate-100 rounded-full h-2 overflow-hidden">
+                        <div className="h-2 rounded-full" style={{ width: `${catPct}%`, backgroundColor: catGrowth >= 0 ? "#16a34a" : "#ef4444" }} />
+                      </div>
+                      <span className="text-[10px] font-semibold text-slate-700 w-12 text-right">{fmtGrowth(bench.growthRate)}</span>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+            {growthContrib !== 0 && (
+              <div className="text-[10px] text-slate-500 bg-slate-50 rounded-lg px-2.5 py-2">
+                This item accounts for ~{(growthContrib * 100).toFixed(1)}pp of {l.category}&apos;s growth
+              </div>
+            )}
+          </div>
+
+          {/* Promo Deep Dive */}
+          <div>
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+              Promo Deep Dive
+            </div>
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              <div className="bg-slate-50 rounded-lg p-2.5 text-center">
+                <div className="text-xs font-semibold text-slate-700">${l.basePrice.toFixed(2)}</div>
+                <div className="text-[9px] text-slate-400 mt-0.5">Base Price</div>
+              </div>
+              <div className="bg-slate-50 rounded-lg p-2.5 text-center">
+                <div className="text-xs font-semibold text-slate-700">${l.priceLatest.toFixed(2)}</div>
+                <div className="text-[9px] text-slate-400 mt-0.5">Avg Price</div>
+              </div>
+              {promoPrice != null && (
+                <div className="bg-amber-50 rounded-lg p-2.5 text-center border border-amber-100">
+                  <div className="text-xs font-semibold text-amber-700">${promoPrice.toFixed(2)}</div>
+                  <div className="text-[9px] text-amber-500 mt-0.5">Promo Price</div>
+                </div>
+              )}
+              <div className="bg-slate-50 rounded-lg p-2.5 text-center">
+                <div className="text-xs font-semibold text-slate-700">{(l.promoDependency * 100).toFixed(0)}%</div>
+                <div className="text-[9px] text-slate-400 mt-0.5">% On Promo</div>
+              </div>
+            </div>
+            {promoDepth > 0 && (
+              <div className="text-[10px] text-slate-500 bg-slate-50 rounded-lg px-2.5 py-2 mb-2">
+                When on promo, discount is ~{(promoDepth * 100).toFixed(0)}% off
+              </div>
+            )}
+            <div>
+              <div className="text-[10px] text-slate-500 mb-1">Volume split</div>
+              <div className="flex h-2 rounded-full overflow-hidden">
+                <div
+                  className="h-2"
+                  style={{ width: `${(l.baseMix * 100).toFixed(0)}%`, backgroundColor: "#475569" }}
+                />
+                <div
+                  className="h-2"
+                  style={{ width: `${(l.promoDependency * 100).toFixed(0)}%`, backgroundColor: "#f59e0b" }}
+                />
+              </div>
+              <div className="flex justify-between mt-1">
+                <span className="text-[9px] text-slate-500">Base {(l.baseMix * 100).toFixed(0)}%</span>
+                <span className="text-[9px] text-amber-600">Promo {(l.promoDependency * 100).toFixed(0)}%</span>
+              </div>
+            </div>
+          </div>
+
           {/* Dist gain */}
           <div className="bg-blue-50 border border-blue-100 rounded-xl p-3.5">
             <div className="text-xs font-semibold text-blue-700 mb-1">Distribution Gain Since Launch</div>
@@ -189,6 +305,14 @@ export function LaunchDetailDrawer({ launch: l, onClose }: Props) {
               {l.launchCohortMonth} → today · {l.category} benchmark 12w: {fmtN(bench.medianTdp12w, 0)} TDP
             </div>
           </div>
+
+          {/* View Full Analysis */}
+          <Link
+            href={`/launches/${l.upc}`}
+            className="flex items-center justify-center gap-2 w-full py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+          >
+            View Full Analysis →
+          </Link>
 
           {/* Find Analogs */}
           <Link

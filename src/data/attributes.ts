@@ -134,3 +134,76 @@ export function getRisingUnderpenetrated(category?: Category): AttributePerf[] {
     : ATTRIBUTE_PERFORMANCE.filter((a) => a.trend === "rising" && a.penetrationRate < 0.35);
   return filtered.sort((a, b) => b.winRate - a.winRate);
 }
+
+// ─── Attribute Demand Signals ─────────────────────────────────────────────────
+
+export interface AttributeDemandSignal {
+  attributeName: string;
+  attributeValue: string;
+  category: Category;
+  penetrationRate: number;
+  trend: "rising" | "stable" | "declining";
+  launchCount: number;
+  attrDollarShare: number;
+  attrWeightedGrowth: number;
+  categoryGrowthContrib: number;
+  signal: "Demand Driver" | "Share Shift" | "Niche Leader" | "Fading";
+}
+
+export function getAttributeDemandSignals(category: Category | null): AttributeDemandSignal[] {
+  const entries = category === null
+    ? ATTRIBUTE_PERFORMANCE
+    : ATTRIBUTE_PERFORMANCE.filter((ap) => ap.category === category);
+
+  return entries.map((ap): AttributeDemandSignal => {
+    const catLaunches = LAUNCHES.filter((l) => l.category === ap.category);
+    const matchingLaunches = catLaunches.filter((l) => {
+      const a = l.attributes;
+      if (ap.attributeName === "Organic")     return a.isOrganic === (ap.attributeValue === "true");
+      if (ap.attributeName === "Non-GMO")     return a.isNonGmo === (ap.attributeValue === "true");
+      if (ap.attributeName === "Gluten-Free") return a.isGlutenFree === (ap.attributeValue === "true");
+      if (ap.attributeName === "Vegan")       return a.isVegan === (ap.attributeValue === "true");
+      if (ap.attributeName === "Keto")        return a.isKeto === (ap.attributeValue === "true");
+      if (ap.attributeName === "Protein")     return a.isProteinFocused === (ap.attributeValue === "true");
+      if (ap.attributeName === "Form")        return a.form === ap.attributeValue;
+      if (ap.attributeName === "Functional Ingredient") return a.functionalIngredient === ap.attributeValue;
+      if (ap.attributeName === "Health Focus") return a.healthFocus === ap.attributeValue;
+      return false;
+    });
+
+    const categoryDollars = catLaunches.reduce((sum, l) => sum + l.dollarsLatest, 0);
+    const attrDollars = matchingLaunches.reduce((sum, l) => sum + l.dollarsLatest, 0);
+
+    const attrDollarShare = categoryDollars === 0 ? 0 : attrDollars / categoryDollars;
+
+    const attrWeightedGrowth = attrDollars === 0
+      ? 0
+      : matchingLaunches.reduce((sum, l) => sum + (l.growthRate12w ?? 0) * l.dollarsLatest, 0) / attrDollars;
+
+    const categoryGrowthContrib = attrDollarShare * attrWeightedGrowth;
+
+    let signal: AttributeDemandSignal["signal"];
+    if (ap.trend === "rising" && categoryGrowthContrib > 0) {
+      signal = "Demand Driver";
+    } else if (ap.trend === "rising" && categoryGrowthContrib <= 0) {
+      signal = "Share Shift";
+    } else if (ap.trend !== "rising" && categoryGrowthContrib > 0) {
+      signal = "Niche Leader";
+    } else {
+      signal = "Fading";
+    }
+
+    return {
+      attributeName: ap.attributeName,
+      attributeValue: ap.attributeValue,
+      category: ap.category,
+      penetrationRate: ap.penetrationRate,
+      trend: ap.trend,
+      launchCount: matchingLaunches.length,
+      attrDollarShare,
+      attrWeightedGrowth,
+      categoryGrowthContrib,
+      signal,
+    };
+  });
+}

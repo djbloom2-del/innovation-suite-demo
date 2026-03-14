@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import type { Launch } from "@/lib/types";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -99,4 +100,35 @@ export function scoreHex(score: number): string {
   if (score >= 50) return "#2563eb"; // blue-600
   if (score >= 25) return "#d97706"; // amber-600
   return "#dc2626";                   // red-600
+}
+
+// $ generated per total distribution point (efficiency metric)
+export function getDollarPerTdp(l: Launch): number {
+  return l.tdpLatest > 0 ? l.dollarsLatest / l.tdpLatest : 0;
+}
+
+// Category ranking: Top Third / Mid Third / Bottom Third by dollarsLatest
+export function getCategoryTier(l: Launch, allLaunches: Launch[]): "Top Third" | "Mid Third" | "Bottom Third" {
+  const peers = allLaunches.filter(p => p.category === l.category);
+  peers.sort((a, b) => b.dollarsLatest - a.dollarsLatest);
+  const rank = peers.findIndex(p => p.upc === l.upc) + 1;
+  const n = peers.length;
+  if (rank <= Math.ceil(n / 3)) return "Top Third";
+  if (rank <= Math.ceil((2 * n) / 3)) return "Mid Third";
+  return "Bottom Third";
+}
+
+// Effective promo depth: what % discount is applied when item is on promotion
+// Formula: (basePrice - avgActualPrice) / basePrice / promoDependency
+// Returns 0 if promoDependency < 0.01 (essentially never on promo)
+export function getPromoDepth(l: Launch): number {
+  if (l.promoDependency < 0.01) return 0;
+  return (l.basePrice - l.priceLatest) / l.basePrice / l.promoDependency;
+}
+
+// Item's contribution to category growth in percentage points
+// e.g. 0.75 means this item drove 0.75pp of category's total growth rate
+export function getGrowthContribution(l: Launch, benchGrowthRate: number): number {
+  if (!l.growthRate12w || benchGrowthRate === 0) return 0;
+  return l.dollarShareCategory * l.growthRate12w;
 }

@@ -8,6 +8,8 @@ import {
   ATTR_KEYS,
   type AttrKey,
   matchesAttr,
+  getAttributeDemandSignals,
+  type AttributeDemandSignal,
 } from "@/data/attributes";
 import { LAUNCHES, getWinners } from "@/data/launches";
 import { fmt$, fmtPct, scoreBg, scoreHex } from "@/lib/utils";
@@ -20,10 +22,14 @@ import {
   ResponsiveContainer,
   Cell,
   ReferenceLine,
+  ReferenceArea,
   CartesianGrid,
   LineChart,
   Line,
   Legend,
+  ScatterChart,
+  Scatter,
+  ZAxis,
 } from "recharts";
 import { Zap, ListFilter, ShieldCheck, BarChart2, SlidersHorizontal } from "lucide-react";
 import { AttributeSocialPanel } from "@/components/social/AttributeSocialPanel";
@@ -31,6 +37,13 @@ import { AttributeSocialPanel } from "@/components/social/AttributeSocialPanel";
 const ATTR_COLORS = [
   "#2563eb","#16a34a","#7c3aed","#d97706","#0891b2","#db2777","#059669","#9333ea",
 ];
+
+const SIGNAL_COLORS: Record<string, string> = {
+  "Demand Driver": "#10b981",
+  "Share Shift":   "#f59e0b",
+  "Niche Leader":  "#3b82f6",
+  "Fading":        "#94a3b8",
+};
 
 const RETAILERS: Retailer[] = ["Natural", "Conventional", "Club", "Mass"];
 
@@ -326,6 +339,11 @@ export default function WinnerDNA() {
       .filter((l) => trendsShowAttrs.every((a) => matchesAttr(l, a)))
       .sort((a, b) => b.velocityLatest - a.velocityLatest);
   }, [trendsFiltered, trendsShowAttrs]);
+
+  const demandSignals = useMemo(
+    () => getAttributeDemandSignals(trendsCategory || null),
+    [trendsCategory]
+  );
 
   function toggleTrendsAttr(attr: AttrKey) {
     setTrendsShowAttrs((prev) =>
@@ -1150,6 +1168,137 @@ export default function WinnerDNA() {
               )}
             </div>
           )}
+
+          {/* Attribute Demand Signals */}
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <div className="flex items-center gap-2 mb-1">
+              <BarChart2 size={14} className="text-emerald-500" />
+              <h2 className="text-sm font-semibold text-slate-700">Attribute Demand Signals</h2>
+            </div>
+            <p className="text-xs text-slate-400 mb-4">
+              Is attribute growth driving category growth, or just shifting share?
+              Bubbles sized by launch count.
+            </p>
+
+            {/* Scatter chart */}
+            <ResponsiveContainer width="100%" height={320}>
+              <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis
+                  dataKey="penetrationRate"
+                  type="number"
+                  domain={[0, 1]}
+                  tickFormatter={(v) => `${(v * 100).toFixed(0)}%`}
+                  label={{ value: "Penetration Rate", position: "insideBottom", offset: -10, style: { fontSize: 10, fill: "#94a3b8" } }}
+                  tick={{ fontSize: 10 }}
+                />
+                <YAxis
+                  dataKey="categoryGrowthContrib"
+                  type="number"
+                  tickFormatter={(v) => `${(v * 100).toFixed(1)}pp`}
+                  label={{ value: "Growth Contrib (pp)", angle: -90, position: "insideLeft", style: { fontSize: 10, fill: "#94a3b8" } }}
+                  tick={{ fontSize: 10 }}
+                  width={60}
+                />
+                <ZAxis dataKey="launchCount" range={[40, 400]} />
+                {/* Quadrant labels */}
+                <ReferenceArea x1={0.5} x2={1} y1={0} y2={0.1} fill="none"
+                  label={{ value: "Demand Drivers", position: "insideTopRight", fontSize: 9, fill: "#10b981", fontWeight: 600 }} />
+                <ReferenceArea x1={0.5} x2={1} y1={-0.1} y2={0} fill="none"
+                  label={{ value: "Share Shift", position: "insideBottomRight", fontSize: 9, fill: "#f59e0b", fontWeight: 600 }} />
+                <ReferenceArea x1={0} x2={0.5} y1={0} y2={0.1} fill="none"
+                  label={{ value: "Niche Leaders", position: "insideTopLeft", fontSize: 9, fill: "#3b82f6", fontWeight: 600 }} />
+                <ReferenceArea x1={0} x2={0.5} y1={-0.1} y2={0} fill="none"
+                  label={{ value: "Fading", position: "insideBottomLeft", fontSize: 9, fill: "#94a3b8", fontWeight: 600 }} />
+                <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="4 2" />
+                <Tooltip
+                  content={(props: any) => {
+                    const { active, payload } = props;
+                    if (!active || !payload?.length) return null;
+                    const d = payload[0].payload as AttributeDemandSignal;
+                    return (
+                      <div className="bg-white border border-slate-200 rounded-lg p-2.5 shadow-sm text-xs">
+                        <div className="font-semibold text-slate-800 mb-1">{d.attributeName}</div>
+                        <div className="text-slate-500">{d.category}</div>
+                        <div className="mt-1 space-y-0.5">
+                          <div>Penetration: {(d.penetrationRate * 100).toFixed(0)}%</div>
+                          <div>Growth Contrib: {(d.categoryGrowthContrib * 100).toFixed(1)}pp</div>
+                          <div>Launches: {d.launchCount}</div>
+                          <div className="font-semibold mt-1" style={{ color: SIGNAL_COLORS[d.signal] }}>{d.signal}</div>
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
+                {/* One Scatter series per signal type, each with its own color */}
+                {(["Demand Driver", "Share Shift", "Niche Leader", "Fading"] as Array<AttributeDemandSignal["signal"]>).map((sig) => {
+                  const data = demandSignals.filter((d) => d.signal === sig);
+                  return (
+                    <Scatter
+                      key={sig}
+                      name={sig}
+                      data={data}
+                      fill={SIGNAL_COLORS[sig]}
+                      fillOpacity={0.7}
+                    />
+                  );
+                })}
+              </ScatterChart>
+            </ResponsiveContainer>
+
+            {/* Custom legend */}
+            <div className="flex flex-wrap gap-4 justify-center mt-2 text-[10px]">
+              {(["Demand Driver", "Share Shift", "Niche Leader", "Fading"] as const).map((label) => (
+                <div key={label} className="flex items-center gap-1">
+                  <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: SIGNAL_COLORS[label] }} />
+                  <span className="text-slate-500">{label}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Signal table */}
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="text-left pb-2 text-slate-400 font-medium">Attribute</th>
+                    <th className="text-left pb-2 text-slate-400 font-medium">Category</th>
+                    <th className="text-right pb-2 text-slate-400 font-medium">Trend</th>
+                    <th className="text-right pb-2 text-slate-400 font-medium">Penetration</th>
+                    <th className="text-right pb-2 text-slate-400 font-medium">Growth Contrib</th>
+                    <th className="text-right pb-2 text-slate-400 font-medium">Signal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...demandSignals]
+                    .sort((a, b) => b.categoryGrowthContrib - a.categoryGrowthContrib)
+                    .map((d) => {
+                      const signalCls: Record<string, string> = {
+                        "Demand Driver": "bg-emerald-100 text-emerald-700",
+                        "Share Shift": "bg-amber-100 text-amber-700",
+                        "Niche Leader": "bg-blue-100 text-blue-700",
+                        "Fading": "bg-slate-100 text-slate-500",
+                      };
+                      const trendCls = d.trend === "rising" ? "bg-emerald-50 text-emerald-600" : d.trend === "declining" ? "bg-red-50 text-red-600" : "bg-slate-50 text-slate-500";
+                      return (
+                        <tr key={`${d.attributeName}-${d.category}`} className="border-b border-slate-50 hover:bg-slate-50">
+                          <td className="py-2 font-medium text-slate-700">{d.attributeName}</td>
+                          <td className="py-2 text-slate-500">{d.category}</td>
+                          <td className="py-2 text-right">
+                            <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${trendCls}`}>{d.trend}</span>
+                          </td>
+                          <td className="py-2 text-right text-slate-600 tabular-nums">{(d.penetrationRate * 100).toFixed(0)}%</td>
+                          <td className="py-2 text-right text-slate-600 tabular-nums">{(d.categoryGrowthContrib * 100).toFixed(1)}pp</td>
+                          <td className="py-2 text-right">
+                            <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${signalCls[d.signal]}`}>{d.signal}</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
           {/* Social Signals */}
           <div className="bg-white rounded-xl border border-slate-200 p-5">
