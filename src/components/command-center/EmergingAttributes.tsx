@@ -3,8 +3,10 @@ import { ATTRIBUTE_PERFORMANCE } from "@/data/attributes";
 import { TrendingUp } from "lucide-react";
 
 export function EmergingAttributes() {
+  // Compound signal: winRate × overindexVsAll — rewards attributes that are both
+  // winning AND under-penetrated (high overindex = few launches but outsized win rate)
   const rising = ATTRIBUTE_PERFORMANCE.filter((a) => a.trend === "rising")
-    .sort((a, b) => b.overindexVsAll - a.overindexVsAll)
+    .sort((a, b) => b.winRate * b.overindexVsAll - a.winRate * a.overindexVsAll)
     .slice(0, 10);
 
   const colors = [
@@ -20,6 +22,17 @@ export function EmergingAttributes() {
     "bg-orange-50 text-orange-700 border-orange-200",
   ];
 
+  function getLabel(a: (typeof rising)[0]): { text: string; color: string } {
+    const signal = a.winRate * a.overindexVsAll;
+    if (signal >= 0.4 && a.penetrationRate < 0.35) {
+      return { text: "Rising & Winning", color: "text-green-600" };
+    }
+    if (a.penetrationRate >= 0.5) {
+      return { text: "Saturated", color: "text-amber-500" };
+    }
+    return { text: "Rising", color: "text-blue-500" };
+  }
+
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-5">
       <div className="flex items-center justify-between mb-4">
@@ -27,20 +40,28 @@ export function EmergingAttributes() {
           <TrendingUp size={14} className="text-green-500" />
           <h2 className="text-sm font-semibold text-slate-700">Emerging Attributes</h2>
         </div>
-        <Link href="/winner-dna" className="text-xs text-blue-600 hover:underline">Analyze →</Link>
+        <Link href="/winner-dna" className="text-xs text-blue-600 hover:underline">
+          Analyze →
+        </Link>
       </div>
       <div className="flex flex-wrap gap-2">
-        {rising.map((a, i) => (
-          <span
-            key={`${a.attributeName}-${a.category}`}
-            className={`inline-flex flex-col border rounded-lg px-3 py-1.5 ${colors[i % colors.length]}`}
-          >
-            <span className="text-xs font-semibold leading-tight">{a.attributeName}</span>
-            <span className="text-[9px] opacity-70 leading-tight">
-              {a.category} · {Math.round(a.winRate * 100)}% win rate
+        {rising.map((a, i) => {
+          const lbl = getLabel(a);
+          return (
+            <span
+              key={`${a.attributeName}-${a.category}`}
+              className={`inline-flex flex-col border rounded-lg px-3 py-1.5 ${colors[i % colors.length]}`}
+            >
+              <span className="text-xs font-semibold leading-tight">{a.attributeName}</span>
+              <span className="text-[9px] opacity-70 leading-tight">
+                {a.category} · {Math.round(a.winRate * 100)}% win · {a.overindexVsAll.toFixed(1)}× idx
+              </span>
+              <span className={`text-[9px] font-semibold leading-tight mt-0.5 ${lbl.color}`}>
+                {lbl.text}
+              </span>
             </span>
-          </span>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

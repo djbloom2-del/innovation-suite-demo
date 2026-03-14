@@ -1,15 +1,16 @@
 import type { Launch, Category } from "./types";
-
-const CATEGORIES: Category[] = ["Bars", "Beverages", "Snacks", "Supplements", "Frozen Meals"];
+import { CATEGORIES } from "@/data/categories";
+import { PRICE_TIER_THRESHOLDS } from "@/lib/utils";
 
 function oneHotCategory(cat: Category): number[] {
   return CATEGORIES.map((c) => (c === cat ? 1 : 0));
 }
 
 function priceTierIndex(price: number): number {
-  if (price < 3) return 0;
-  if (price < 6) return 1;
-  if (price < 10) return 2;
+  const [t1, t2, t3] = PRICE_TIER_THRESHOLDS;
+  if (price < t1) return 0;
+  if (price < t2) return 1;
+  if (price < t3) return 2;
   return 3;
 }
 
@@ -18,7 +19,11 @@ function normalize(val: number, min: number, max: number): number {
   return (val - min) / (max - min);
 }
 
-function buildFeatureVector(l: Launch, allLaunches: Launch[]): number[] {
+function oneHotForm(form: string, allForms: string[]): number[] {
+  return allForms.map((f) => (f === form ? 1.5 : 0)); // weight slightly below category (2.0)
+}
+
+function buildFeatureVector(l: Launch, allLaunches: Launch[], allForms: string[]): number[] {
   const velocities = allLaunches.map((x) => x.velocityLatest);
   const tdps = allLaunches.map((x) => x.tdpLatest);
   const minV = Math.min(...velocities);
@@ -37,6 +42,8 @@ function buildFeatureVector(l: Launch, allLaunches: Launch[]): number[] {
     l.attributes.isProteinFocused ? 1 : 0,
     normalize(l.velocityLatest, minV, maxV),
     normalize(l.tdpLatest, minT, maxT),
+    ...oneHotForm(l.attributes.form, allForms),          // form factor (RTD vs Gummies vs Bar…)
+    l.attributes.functionalIngredient !== null ? 1 : 0,  // has a functional ingredient
   ];
 }
 
@@ -60,12 +67,14 @@ export function findAnalogs(
   topN = 5
 ): AnalogResult[] {
   const candidates = allLaunches.filter((l) => l.upc !== target.upc);
-  const targetVec = buildFeatureVector(target, allLaunches);
+  // Derive all distinct form values once so the feature vectors are consistently dimensioned
+  const allForms = [...new Set(allLaunches.map((l) => l.attributes.form))].sort();
+  const targetVec = buildFeatureVector(target, allLaunches, allForms);
 
   const scored = candidates
     .map((l) => ({
       launch: l,
-      similarityScore: cosineSimilarity(targetVec, buildFeatureVector(l, allLaunches)),
+      similarityScore: cosineSimilarity(targetVec, buildFeatureVector(l, allLaunches, allForms)),
     }))
     .sort((a, b) => b.similarityScore - a.similarityScore)
     .slice(0, topN);

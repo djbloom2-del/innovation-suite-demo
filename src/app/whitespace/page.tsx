@@ -5,7 +5,7 @@ import {
   WHITESPACE_OPPORTUNITIES,
   getWhitespaceBubbleData,
 } from "@/data/whitespace";
-import { getRisingUnderpenetrated, ATTRIBUTE_PERFORMANCE } from "@/data/attributes";
+import { getRisingUnderpenetrated, ATTRIBUTE_PERFORMANCE, ATTR_KEYS, type AttrKey } from "@/data/attributes";
 import { CATEGORY_BENCHMARKS, CATEGORIES } from "@/data/categories";
 import { LAUNCHES, getWinners } from "@/data/launches";
 import type { WhitespaceOpportunity, AttributePerf, Category, Launch } from "@/lib/types";
@@ -25,8 +25,6 @@ import { Lightbulb, TrendingUp, Target, Layers } from "lucide-react";
 
 // ─── Module-scope constants ───────────────────────────────────────────────────
 
-const COMBO_ATTR_KEYS = ["Organic", "Non-GMO", "Gluten-Free", "Vegan", "Keto", "Protein"] as const;
-type AttrKey = typeof COMBO_ATTR_KEYS[number];
 
 const QUADRANT_LABELS = [
   { x: 2.5, y: 28, text: "Open & Growing",     color: "#16a34a", desc: "Best Whitespace" },
@@ -392,7 +390,7 @@ export default function WhitespaceLab() {
 
         {/* Attribute toggle pills */}
         <div className="flex flex-wrap gap-2 mb-4">
-          {COMBO_ATTR_KEYS.map((attr) => {
+          {ATTR_KEYS.map((attr) => {
             const active = comboAttrs.includes(attr);
             return (
               <button
@@ -428,8 +426,8 @@ export default function WhitespaceLab() {
           </div>
         ) : (
           <>
-            {/* KPI strip */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            {/* KPI strip — 5 cards */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
               {/* Combo Penetration — low = more whitespace */}
               <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
                 <div className={`text-xl font-bold ${comboData.comboPenetration < 0.2 ? "text-amber-600" : "text-slate-700"}`}>
@@ -465,6 +463,20 @@ export default function WhitespaceLab() {
                 <div className="text-xl font-bold text-purple-600">{fmt$(comboData.comboPrize)}</div>
                 <div className="text-[10px] text-slate-400 mt-0.5">Est. Prize</div>
               </div>
+              {/* Crowding Score */}
+              {(() => {
+                const b = CATEGORY_BENCHMARKS.find((bm) => bm.category === comboCat);
+                const crowding = b?.crowdingScore ?? 0;
+                const crowdColor = crowding >= 7 ? "text-red-500" : crowding >= 5 ? "text-amber-600" : "text-green-600";
+                const crowdLabel = crowding >= 7 ? "High competition" : crowding >= 5 ? "Moderate" : "Open market";
+                return (
+                  <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
+                    <div className={`text-xl font-bold ${crowdColor}`}>{crowding.toFixed(1)}</div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">{comboCat} Crowding</div>
+                    <div className={`text-[9px] font-medium mt-0.5 ${crowdColor}`}>{crowdLabel}</div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Insight narrative */}
@@ -498,6 +510,9 @@ export default function WhitespaceLab() {
                       </div>
                       <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded border ${scoreBg(l.launchQualityScore)}`}>
                         {l.launchQualityScore}
+                      </span>
+                      <span className="text-[10px] text-blue-600 font-semibold shrink-0">
+                        {fmt$(l.velocityLatest)}/st
                       </span>
                       {l.dollars26w != null && (
                         <span className="text-[10px] text-slate-500 shrink-0">{fmt$(l.dollars26w)}</span>

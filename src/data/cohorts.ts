@@ -1,5 +1,5 @@
 import type { CohortRow, Category } from "@/lib/types";
-import { LAUNCHES } from "./launches";
+import { LAUNCHES, DATA_SNAPSHOT_DATE } from "./launches";
 
 function getMonthKey(dateStr: string): string {
   return dateStr.slice(0, 7) + "-01";
@@ -47,7 +47,7 @@ export const COHORT_ROWS: CohortRow[] = buildCohortRows();
 
 // Monthly launch counts for trend chart (last 18 months)
 export function getMonthlyLaunchCounts(): { month: string; count: number }[] {
-  const now = new Date("2026-03-08");
+  const now = new Date(DATA_SNAPSHOT_DATE);
   const counts = new Map<string, number>();
 
   for (let i = 17; i >= 0; i--) {
@@ -65,7 +65,7 @@ export function getMonthlyLaunchCounts(): { month: string; count: number }[] {
   return Array.from(counts.entries()).map(([month, count]) => ({ month, count }));
 }
 
-// Attribute adoption over time (for stacked area chart)
+// Attribute adoption over time — dollar-weighted (% of category $ from launches with attribute)
 export function getAttributeAdoptionOverTime(): {
   month: string;
   organic: number;
@@ -74,7 +74,7 @@ export function getAttributeAdoptionOverTime(): {
   vegan: number;
   nonGmo: number;
 }[] {
-  const now = new Date("2026-03-08");
+  const now = new Date(DATA_SNAPSHOT_DATE);
   const months: string[] = [];
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now);
@@ -92,19 +92,29 @@ export function getAttributeAdoptionOverTime(): {
     });
     if (monthLaunches.length === 0)
       return { month, organic: 0, keto: 0, protein: 0, vegan: 0, nonGmo: 0 };
-    const total = monthLaunches.length;
+
+    // Dollar-weight by dollarsLatest so attribute share reflects revenue, not just launch count
+    const totalDollars = monthLaunches.reduce((s, l) => s + l.dollarsLatest, 0);
+    if (totalDollars === 0)
+      return { month, organic: 0, keto: 0, protein: 0, vegan: 0, nonGmo: 0 };
+
+    const dollarShare = (filter: (l: (typeof monthLaunches)[0]) => boolean) =>
+      Math.round(
+        (monthLaunches.filter(filter).reduce((s, l) => s + l.dollarsLatest, 0) / totalDollars) * 100
+      );
+
     return {
       month,
-      organic: Math.round((monthLaunches.filter((l) => l.attributes.isOrganic).length / total) * 100),
-      keto: Math.round((monthLaunches.filter((l) => l.attributes.isKeto).length / total) * 100),
-      protein: Math.round((monthLaunches.filter((l) => l.attributes.isProteinFocused).length / total) * 100),
-      vegan: Math.round((monthLaunches.filter((l) => l.attributes.isVegan).length / total) * 100),
-      nonGmo: Math.round((monthLaunches.filter((l) => l.attributes.isNonGmo).length / total) * 100),
+      organic: dollarShare((l) => l.attributes.isOrganic),
+      keto: dollarShare((l) => l.attributes.isKeto),
+      protein: dollarShare((l) => l.attributes.isProteinFocused),
+      vegan: dollarShare((l) => l.attributes.isVegan),
+      nonGmo: dollarShare((l) => l.attributes.isNonGmo),
     };
   });
 }
 
-// Survival curve data
+// Survival curve data — derived from actual LAUNCHES survival flags
 export function getSurvivalCurveData(): {
   week: number;
   cohort1: number;
@@ -112,31 +122,63 @@ export function getSurvivalCurveData(): {
   cohort3: number;
 }[] {
   const weeks = [4, 8, 12, 16, 20, 26, 39, 52];
-  const cohortLaunches = [
-    LAUNCHES.filter((l) => {
-      const m = l.launchCohortMonth;
-      return m >= "2025-01-01" && m <= "2025-06-01";
-    }),
-    LAUNCHES.filter((l) => {
-      const m = l.launchCohortMonth;
-      return m >= "2024-07-01" && m <= "2024-12-01";
-    }),
-    LAUNCHES.filter((l) => {
-      const m = l.launchCohortMonth;
-      return m >= "2024-01-01" && m <= "2024-06-01";
-    }),
+
+  // Three vintage cohorts by launch cohort month
+  const cohortGroups = [
+    LAUNCHES.filter((l) => l.launchCohortMonth >= "2025-01-01" && l.launchCohortMonth <= "2025-06-01"),
+    LAUNCHES.filter((l) => l.launchCohortMonth >= "2024-07-01" && l.launchCohortMonth <= "2024-12-01"),
+    LAUNCHES.filter((l) => l.launchCohortMonth >= "2024-01-01" && l.launchCohortMonth <= "2024-06-01"),
   ];
 
-  const baseRates = [
-    [0.92, 0.88, 0.84, 0.80, 0.76, 0.68, 0.58, null],
-    [0.91, 0.86, 0.80, 0.74, 0.70, 0.62, 0.52, 0.43],
-    [0.90, 0.84, 0.78, 0.72, 0.67, 0.59, 0.48, 0.40],
-  ];
+  function survivalAnchors(group: typeof LAUNCHES): {
+    w12: number;
+    w26: number | null;
+    w52: number | null;
+  } {
+    if (group.length === 0) return { w12: 0, w26: null, w52: null };
+    const w12 = group.filter((l) => l.survived12w).length / group.length;
+    const eligible26 = group.filter((l) => l.survived26w !== null);
+    const w26 =
+      eligible26.length > 0
+        ? eligible26.filter((l) => l.survived26w === true).length / eligible26.length
+        : null;
+    const eligible52 = group.filter((l) => l.survived52w !== null);
+    const w52 =
+      eligible52.length > 0
+        ? eligible52.filter((l) => l.survived52w === true).length / eligible52.length
+        : null;
+    return { w12, w26, w52 };
+  }
 
-  return weeks.map((week, wi) => ({
+  function interpRate(
+    week: number,
+    anchors: { w12: number; w26: number | null; w52: number | null }
+  ): number {
+    const { w12, w26, w52 } = anchors;
+    if (week <= 12) {
+      // Linear from 1.0 at week 0 to w12 at week 12
+      const t = week / 12;
+      return Math.round((1 - t * (1 - w12)) * 100);
+    }
+    if (week <= 26) {
+      if (w26 === null) return 0;
+      const t = (week - 12) / (26 - 12);
+      return Math.round((w12 + t * (w26 - w12)) * 100);
+    }
+    if (week <= 52) {
+      if (w26 === null || w52 === null) return 0;
+      const t = (week - 26) / (52 - 26);
+      return Math.round((w26 + t * (w52 - w26)) * 100);
+    }
+    return 0;
+  }
+
+  const anchors = cohortGroups.map(survivalAnchors);
+
+  return weeks.map((week) => ({
     week,
-    cohort1: baseRates[0][wi] !== null ? Math.round((baseRates[0][wi] as number) * 100) : 0,
-    cohort2: Math.round((baseRates[1][wi] as number) * 100),
-    cohort3: Math.round((baseRates[2][wi] as number) * 100),
+    cohort1: interpRate(week, anchors[0]),
+    cohort2: interpRate(week, anchors[1]),
+    cohort3: interpRate(week, anchors[2]),
   }));
 }

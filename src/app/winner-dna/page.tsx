@@ -1,14 +1,16 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import type { Category, Launch } from "@/lib/types";
+import type { Category } from "@/lib/types";
 import { CATEGORIES } from "@/data/categories";
 import {
   getTopAttributesByWinRate,
-  ATTRIBUTE_COMBOS,
+  ATTR_KEYS,
+  type AttrKey,
+  matchesAttr,
 } from "@/data/attributes";
 import { LAUNCHES, getWinners } from "@/data/launches";
-import { fmt$, fmtPct, scoreBg } from "@/lib/utils";
+import { fmt$, fmtPct, scoreBg, scoreHex } from "@/lib/utils";
 import {
   BarChart,
   Bar,
@@ -17,32 +19,13 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
-  ScatterChart,
-  Scatter,
-  ZAxis,
-  CartesianGrid,
   ReferenceLine,
 } from "recharts";
-import { Zap, ListFilter, ShieldCheck } from "lucide-react";
+import { Zap, ListFilter, ShieldCheck, BarChart2 } from "lucide-react";
 
 const ATTR_COLORS = [
   "#2563eb","#16a34a","#7c3aed","#d97706","#0891b2","#db2777","#059669","#9333ea",
 ];
-
-// ── Attribute Combo Explorer helpers ────────────────────────────
-const ATTR_KEYS = ["Organic","Non-GMO","Gluten-Free","Vegan","Keto","Protein"] as const;
-type AttrKey = typeof ATTR_KEYS[number];
-
-function matchesAttr(l: Launch, attr: AttrKey): boolean {
-  const a = l.attributes;
-  if (attr === "Organic")     return a.isOrganic;
-  if (attr === "Non-GMO")     return a.isNonGmo;
-  if (attr === "Gluten-Free") return a.isGlutenFree;
-  if (attr === "Vegan")       return a.isVegan;
-  if (attr === "Keto")        return a.isKeto;
-  if (attr === "Protein")     return a.isProteinFocused;
-  return false;
-}
 
 function medianVal(vals: number[]): number {
   if (!vals.length) return 0;
@@ -68,6 +51,9 @@ export default function WinnerDNA() {
     const catLaunches = LAUNCHES.filter((l) => l.category === category);
     const catWinners  = getWinners(catLaunches);
     const catWinRate  = catLaunches.length ? catWinners.length / catLaunches.length : 0;
+    const catAvgVelocity = catLaunches.length
+      ? catLaunches.reduce((s, l) => s + l.velocityLatest, 0) / catLaunches.length
+      : 0;
 
     return ATTR_KEYS.map((attr) => {
       const withAttr    = catLaunches.filter((l) => matchesAttr(l, attr));
@@ -83,7 +69,11 @@ export default function WinnerDNA() {
       const promoDep = withAttr.length
         ? withAttr.reduce((s, l) => s + l.promoDependency, 0) / withAttr.length
         : 0;
-      return { attr, count: withAttr.length, winRate, survivalRate, priceIdx, promoDep, catWinRate };
+      // Velocity index: avg velocity of attr launches vs. all cat launches
+      const velIdx = withAttr.length > 0 && catAvgVelocity > 0
+        ? (withAttr.reduce((s, l) => s + l.velocityLatest, 0) / withAttr.length) / catAvgVelocity
+        : 1;
+      return { attr, count: withAttr.length, winRate, survivalRate, priceIdx, promoDep, catWinRate, velIdx };
     }).sort((a, b) => b.winRate - a.winRate);
   }, [category]);
 
@@ -94,13 +84,84 @@ export default function WinnerDNA() {
     launches: a.launchCount,
   }));
 
-  const comboData = ATTRIBUTE_COMBOS.map((c) => ({
-    x: c.launchCount,
-    y: Math.round(c.winRate * 100),
-    z: Math.round(c.medianDollars26w / 1000),
-    name: c.attributes.join(" + "),
-    lift: c.lift,
-  }));
+  // ── Form Factor analysis ──
+  const formData = useMemo(() => {
+    const catLaunches = LAUNCHES.filter((l) => l.category === category);
+    const catWinners  = getWinners(catLaunches);
+    const catWinRate  = catLaunches.length ? catWinners.length / catLaunches.length : 0;
+
+    const formMap = new Map<string, { total: number; winners: number; dollars: number }>();
+    catLaunches.forEach((l) => {
+      const f = l.attributes.form;
+      if (!formMap.has(f)) formMap.set(f, { total: 0, winners: 0, dollars: 0 });
+      const entry = formMap.get(f)!;
+      entry.total += 1;
+      entry.dollars += l.dollarsLatest;
+      if (l.launchQualityScore >= 70) entry.winners += 1;
+    });
+
+    return Array.from(formMap.entries())
+      .map(([form, { total, winners, dollars }]) => ({
+        form,
+        count: total,
+        winRate: total > 0 ? winners / total : 0,
+        lift: catWinRate > 0 ? (total > 0 ? winners / total : 0) / catWinRate : 1,
+        dollarShare: catLaunches.reduce((s, l) => s + l.dollarsLatest, 0) > 0
+          ? dollars / catLaunches.reduce((s, l) => s + l.dollarsLatest, 0)
+          : 0,
+      }))
+      .sort((a, b) => b.winRate - a.winRate);
+  }, [category]);
+
+  // ── Functional Ingredient analysis ──
+  const funcIngredData = useMemo(() => {
+    const catLaunches = LAUNCHES.filter((l) => l.category === category);
+    const catWinRate  = catLaunches.length
+      ? getWinners(catLaunches).length / catLaunches.length
+      : 0;
+
+    const ingredMap = new Map<string, { total: number; winners: number; avgVelocity: number; velocitySum: number }>();
+    catLaunches
+      .filter((l) => l.attributes.functionalIngredient !== null)
+      .forEach((l) => {
+        const k = l.attributes.functionalIngredient!;
+        if (!ingredMap.has(k)) ingredMap.set(k, { total: 0, winners: 0, avgVelocity: 0, velocitySum: 0 });
+        const e = ingredMap.get(k)!;
+        e.total += 1;
+        e.velocitySum += l.velocityLatest;
+        if (l.launchQualityScore >= 70) e.winners += 1;
+      });
+
+    return Array.from(ingredMap.entries())
+      .map(([ingred, { total, winners, velocitySum }]) => ({
+        ingred,
+        count: total,
+        winRate: total > 0 ? winners / total : 0,
+        lift: catWinRate > 0 ? (total > 0 ? winners / total : 0) / catWinRate : 1,
+        avgVelocity: total > 0 ? velocitySum / total : 0,
+      }))
+      .sort((a, b) => b.lift - a.lift);
+  }, [category]);
+
+  // ── Dynamic 2-attribute combo table (all C(6,2)=15 pairs, filtered by category) ──
+  const comboTableData = useMemo(() => {
+    const catLaunches = LAUNCHES.filter(l => l.category === category);
+    const catWinners  = getWinners(catLaunches);
+    const catWinRate  = catLaunches.length ? catWinners.length / catLaunches.length : 0;
+
+    const pairs: { label: string; count: number; winRate: number; lift: number }[] = [];
+    for (let i = 0; i < ATTR_KEYS.length; i++) {
+      for (let j = i + 1; j < ATTR_KEYS.length; j++) {
+        const a = ATTR_KEYS[i];
+        const b = ATTR_KEYS[j];
+        const withBoth = catLaunches.filter(l => matchesAttr(l, a) && matchesAttr(l, b));
+        const winRate  = withBoth.length ? getWinners(withBoth).length / withBoth.length : 0;
+        const lift     = catWinRate > 0 ? winRate / catWinRate : 1;
+        pairs.push({ label: `${a} + ${b}`, count: withBoth.length, winRate, lift });
+      }
+    }
+    return pairs.sort((a, b) => b.lift - a.lift).slice(0, 10);
+  }, [category]);
 
   // ── Explorer data ──
   const explorerData = useMemo(() => {
@@ -226,6 +287,7 @@ export default function WinnerDNA() {
                   <th className="text-right pb-2 text-slate-400 font-medium">Surv@26w</th>
                   <th className="text-right pb-2 text-slate-400 font-medium">Price</th>
                   <th className="text-right pb-2 text-slate-400 font-medium">Promo</th>
+                  <th className="text-right pb-2 text-slate-400 font-medium">Vel</th>
                 </tr>
               </thead>
               <tbody>
@@ -250,6 +312,11 @@ export default function WinnerDNA() {
                     : row.promoDep <= 0.35
                     ? "text-amber-600"
                     : "text-red-500";
+                  const velColor = row.velIdx >= 1.15
+                    ? "text-green-600 font-semibold"
+                    : row.velIdx >= 0.85
+                    ? "text-slate-500"
+                    : "text-amber-600";
                   return (
                     <tr key={row.attr} className="border-b border-slate-50 hover:bg-slate-50">
                       <td className="py-2 text-slate-700 font-medium">{row.attr}</td>
@@ -260,6 +327,7 @@ export default function WinnerDNA() {
                       </td>
                       <td className={`py-2 text-right ${priceColor}`}>{row.priceIdx.toFixed(2)}×</td>
                       <td className={`py-2 text-right ${promoColor}`}>{fmtPct(row.promoDep, 0)}</td>
+                      <td className={`py-2 text-right ${velColor}`}>{row.velIdx.toFixed(2)}×</td>
                     </tr>
                   );
                 })}
@@ -270,7 +338,7 @@ export default function WinnerDNA() {
                   <td className="pt-2 text-right text-[10px] text-slate-500 font-medium">
                     {attrScorecard.length > 0 ? Math.round(attrScorecard[0].catWinRate * 100) + "%" : "—"}
                   </td>
-                  <td colSpan={3} />
+                  <td colSpan={4} />
                 </tr>
               </tfoot>
             </table>
@@ -283,65 +351,152 @@ export default function WinnerDNA() {
         </div>
       </div>
 
-      {/* Attribute Combo bubble chart */}
+      {/* Dynamic 2-attribute combo table */}
       <div className="bg-white rounded-xl border border-slate-200 p-5">
         <div className="flex items-center gap-2 mb-1">
           <Zap size={14} className="text-blue-500" />
-          <h2 className="text-sm font-semibold text-slate-700">Attribute Combination Performance</h2>
+          <h2 className="text-sm font-semibold text-slate-700">Attribute Combination Performance — {category}</h2>
         </div>
         <p className="text-xs text-slate-400 mb-4">
-          X = # of launches with combo · Y = win rate · Bubble = median 26w dollars ($K)
+          All two-attribute pairs ranked by win-rate lift vs. category baseline. Computed live from {category} launches.
         </p>
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-          <ResponsiveContainer width="100%" height={280}>
-            <ScatterChart margin={{ top: 8, right: 16, bottom: 8, left: -8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="x" name="Launches" type="number" domain={[0, 25]} ticks={[0, 5, 10, 15, 20, 25]} tick={{ fontSize: 10 }} label={{ value: "Launch Count", position: "insideBottom", offset: -4, fontSize: 10 }} />
-              <YAxis dataKey="y" name="Win Rate" tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}%`} label={{ value: "Win Rate %", angle: -90, position: "insideLeft", offset: 12, fontSize: 10 }} />
-              <ZAxis dataKey="z" range={[40, 400]} />
-              <Tooltip
-                cursor={{ strokeDasharray: "3 3" }}
-                content={({ payload }) => {
-                  if (!payload?.length) return null;
-                  const d = payload[0].payload;
-                  return (
-                    <div className="bg-white border border-slate-200 rounded-lg p-2.5 text-xs shadow-md">
-                      <div className="font-semibold text-slate-700 mb-1">{d.name}</div>
-                      <div className="text-slate-500">Launches: {d.x}</div>
-                      <div className="text-slate-500">Win Rate: {d.y}%</div>
-                      <div className="text-slate-500">Median 26w $: ${d.z}K</div>
-                      <div className="text-blue-600 font-medium">Lift: {d.lift.toFixed(1)}×</div>
-                    </div>
-                  );
-                }}
-              />
-              <Scatter data={comboData} fill="#2563eb" fillOpacity={0.7} />
-            </ScatterChart>
-          </ResponsiveContainer>
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-slate-100">
+              <th className="text-left pb-2 text-slate-400 font-medium">Combination</th>
+              <th className="text-right pb-2 text-slate-400 font-medium"># Launches</th>
+              <th className="text-right pb-2 text-slate-400 font-medium">Win %</th>
+              <th className="text-right pb-2 text-slate-400 font-medium">Lift</th>
+              <th className="text-right pb-2 text-slate-400 font-medium">vs. Baseline</th>
+            </tr>
+          </thead>
+          <tbody>
+            {comboTableData.map((row, i) => {
+              const liftColor = row.lift >= 2 ? "text-green-600 font-semibold" : row.lift >= 1.3 ? "text-amber-600" : "text-slate-500";
+              const diffPct   = Math.round((row.winRate - (comboTableData[0]?.lift > 0 ? comboTableData[0].winRate / comboTableData[0].lift : 0)) * 100);
+              return (
+                <tr key={i} className="border-b border-slate-50 hover:bg-slate-50">
+                  <td className="py-2 text-slate-700 font-medium">{row.label}</td>
+                  <td className="py-2 text-right text-slate-400">{row.count}</td>
+                  <td className="py-2 text-right text-green-600 font-semibold">{Math.round(row.winRate * 100)}%</td>
+                  <td className={`py-2 text-right ${liftColor}`}>{row.lift.toFixed(1)}×</td>
+                  <td className="py-2 text-right text-slate-400">{diffPct >= 0 ? "+" : ""}{diffPct}pp</td>
+                </tr>
+              );
+            })}
+            {comboTableData.length === 0 && (
+              <tr>
+                <td colSpan={5} className="py-6 text-center text-slate-400 text-xs italic">
+                  Not enough data to compute combinations for this category.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
 
-          {/* Combo table */}
-          <div className="overflow-hidden">
+      {/* ── Form Factor + Functional Ingredient panels ── */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+        {/* Form Factor bar chart */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="flex items-center gap-2 mb-1">
+            <BarChart2 size={14} className="text-blue-500" />
+            <h2 className="text-sm font-semibold text-slate-700">Form Factor Win Rate — {category}</h2>
+          </div>
+          <p className="text-xs text-slate-400 mb-4">
+            Win rate and dollar share by product form · sorted by win rate
+          </p>
+          <ResponsiveContainer width="100%" height={Math.max(180, formData.length * 32)}>
+            <BarChart data={formData} layout="vertical" margin={{ left: 8, right: 56, top: 0, bottom: 0 }}>
+              <XAxis type="number" tickFormatter={(v) => `${Math.round(v * 100)}%`} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} domain={[0, 1]} />
+              <YAxis type="category" dataKey="form" tick={{ fontSize: 11 }} width={96} axisLine={false} tickLine={false} />
+              <Tooltip
+                formatter={(v: any, name: any) =>
+                  name === "winRate" ? [`${Math.round(v * 100)}%`, "Win Rate"] : [`${Math.round(v * 100)}%`, "Dollar Share"]
+                }
+                contentStyle={{ fontSize: 11, border: "1px solid #e2e8f0" }}
+              />
+              <Bar dataKey="winRate" radius={[0, 4, 4, 0]} name="winRate">
+                {formData.map((d, idx) => (
+                  <Cell key={idx} fill={d.winRate >= 0.4 ? "#16a34a" : d.winRate >= 0.25 ? "#2563eb" : "#cbd5e1"} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+          {/* Form factor table */}
+          <div className="mt-3 overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-slate-100">
-                  <th className="text-left pb-2 text-slate-400 font-medium">Combination</th>
-                  <th className="text-right pb-2 text-slate-400 font-medium">Win %</th>
-                  <th className="text-right pb-2 text-slate-400 font-medium">Lift</th>
-                  <th className="text-right pb-2 text-slate-400 font-medium">26w $</th>
+                  <th className="text-left pb-1.5 text-slate-400 font-medium">Form</th>
+                  <th className="text-right pb-1.5 text-slate-400 font-medium">#</th>
+                  <th className="text-right pb-1.5 text-slate-400 font-medium">Win%</th>
+                  <th className="text-right pb-1.5 text-slate-400 font-medium">Lift</th>
+                  <th className="text-right pb-1.5 text-slate-400 font-medium">$Share</th>
                 </tr>
               </thead>
               <tbody>
-                {ATTRIBUTE_COMBOS.sort((a, b) => b.lift - a.lift).map((c, i) => (
-                  <tr key={i} className="border-b border-slate-50 hover:bg-slate-50">
-                    <td className="py-2 text-slate-700 font-medium">{c.attributes.join(" + ")}</td>
-                    <td className="py-2 text-right text-green-600 font-semibold">{Math.round(c.winRate * 100)}%</td>
-                    <td className="py-2 text-right text-blue-600 font-semibold">{c.lift.toFixed(1)}×</td>
-                    <td className="py-2 text-right text-slate-500">${(c.medianDollars26w / 1000).toFixed(0)}K</td>
+                {formData.map((row) => (
+                  <tr key={row.form} className="border-b border-slate-50 hover:bg-slate-50">
+                    <td className="py-1.5 text-slate-700 font-medium truncate max-w-[110px]">{row.form}</td>
+                    <td className="py-1.5 text-right text-slate-400">{row.count}</td>
+                    <td className={`py-1.5 text-right font-semibold ${row.winRate >= 0.3 ? "text-green-600" : "text-slate-500"}`}>
+                      {Math.round(row.winRate * 100)}%
+                    </td>
+                    <td className={`py-1.5 text-right ${row.lift >= 1.5 ? "text-green-600 font-semibold" : row.lift >= 1 ? "text-slate-600" : "text-amber-600"}`}>
+                      {row.lift.toFixed(1)}×
+                    </td>
+                    <td className="py-1.5 text-right text-slate-400">{Math.round(row.dollarShare * 100)}%</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+        </div>
+
+        {/* Functional Ingredient breakdown */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="flex items-center gap-2 mb-1">
+            <Zap size={14} className="text-blue-500" />
+            <h2 className="text-sm font-semibold text-slate-700">Functional Ingredient Performance — {category}</h2>
+          </div>
+          <p className="text-xs text-slate-400 mb-4">
+            Launches featuring a functional ingredient · ranked by win-rate lift vs. category baseline
+          </p>
+          {funcIngredData.length === 0 ? (
+            <div className="text-xs text-slate-400 italic text-center py-8">
+              No launches with functional ingredients in {category}.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="text-left pb-2 text-slate-400 font-medium">Ingredient</th>
+                    <th className="text-right pb-2 text-slate-400 font-medium">#</th>
+                    <th className="text-right pb-2 text-slate-400 font-medium">Win%</th>
+                    <th className="text-right pb-2 text-slate-400 font-medium">Lift</th>
+                    <th className="text-right pb-2 text-slate-400 font-medium">Avg Vel</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {funcIngredData.map((row) => {
+                    const liftColor = row.lift >= 2 ? "text-green-600 font-semibold" : row.lift >= 1.3 ? "text-amber-600" : "text-slate-500";
+                    const wrColor  = row.winRate >= 0.4 ? "text-green-600 font-semibold" : "text-slate-600";
+                    return (
+                      <tr key={row.ingred} className="border-b border-slate-50 hover:bg-slate-50">
+                        <td className="py-2 text-slate-700 font-medium">{row.ingred}</td>
+                        <td className="py-2 text-right text-slate-400">{row.count}</td>
+                        <td className={`py-2 text-right ${wrColor}`}>{Math.round(row.winRate * 100)}%</td>
+                        <td className={`py-2 text-right ${liftColor}`}>{row.lift.toFixed(1)}×</td>
+                        <td className="py-2 text-right text-slate-600 font-medium">{fmt$(row.avgVelocity)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
 

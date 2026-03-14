@@ -63,6 +63,29 @@ export function LaunchCard({ launch: l, onClick }: Props) {
         </div>
       </div>
 
+      {/* Performance signal badges */}
+      {(l.velocityPercentileVsCohort >= 75 ||
+        (l.growthRate12w !== null && l.growthRate12w < -0.10) ||
+        l.survived12w === false) && (
+        <div className="flex gap-1.5 mb-2 flex-wrap">
+          {l.velocityPercentileVsCohort >= 75 && (
+            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200">
+              ★ Top Quartile
+            </span>
+          )}
+          {l.growthRate12w !== null && l.growthRate12w < -0.10 && (
+            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+              ⚠ Decelerating
+            </span>
+          )}
+          {l.survived12w === false && (
+            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200">
+              ✕ Delisted
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Metrics row */}
       <div className="grid grid-cols-4 gap-2 mb-3">
         {[

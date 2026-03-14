@@ -5,6 +5,8 @@ import type { Launch } from "@/lib/types";
 import { LAUNCHES, getBreakoutLaunches, getWinners } from "@/data/launches";
 import { BRANDS } from "@/data/brands";
 import { fmt$, fmtPct, fmtGrowth, scoreColor } from "@/lib/utils";
+import { CATEGORY_BENCHMARKS } from "@/data/categories";
+import { ATTR_KEYS, matchesAttr } from "@/data/attributes";
 import { FileText, ShoppingCart, Users, Download, Copy, BarChart2, CheckCircle2 } from "lucide-react";
 
 const STORY_TYPES = [
@@ -115,9 +117,28 @@ function InnovationBriefPreview({
         </div>
       )}
 
+      {/* Attribute composition */}
+      {launches.length > 0 && (() => {
+        const attrComposition = ATTR_KEYS
+          .map((a) => ({
+            attr: a,
+            pct: launches.filter((l) => matchesAttr(l, a)).length / launches.length,
+          }))
+          .filter((x) => x.pct > 0)
+          .sort((a, b) => b.pct - a.pct);
+        const topClaims = attrComposition.slice(0, 3).map((x) => `${x.attr} (${Math.round(x.pct * 100)}%)`);
+        return attrComposition.length > 0 ? (
+          <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-slate-600">
+            <strong className="text-slate-700">Attribute Profile:</strong>{" "}
+            {topClaims.join(", ")} {attrComposition.length > 3 ? `+${attrComposition.length - 3} more` : ""} — core claims in the selected portfolio
+          </div>
+        ) : null;
+      })()}
+
       <div className="bg-slate-50 rounded-lg p-3 text-xs text-slate-500">
         <strong className="text-slate-600">Key Insight:</strong>{" "}
-        {avgScore >= 60
+        {launches.length === 0 ? "Select launches to generate a data-driven insight." :
+          avgScore >= 60
           ? `${brandName || "This brand"}'s launch portfolio shows above-average quality (${avgScore}/100), with strong velocity signals suggesting sustainable growth.`
           : `${brandName || "This brand"} has room to improve launch quality (${avgScore}/100). Focus on distribution building and reducing promo dependency in the first 12 weeks.`}
       </div>
@@ -134,16 +155,70 @@ function RetailerSellPreview({
   brandName: string;
   context: string;
 }) {
-  const topLaunch = launches.sort((a, b) => b.launchQualityScore - a.launchQualityScore)[0];
+  const sorted = [...launches].sort((a, b) => b.launchQualityScore - a.launchQualityScore);
+  const topLaunch = sorted[0];
   const avgVelocity = launches.length ? launches.reduce((s, l) => s + l.velocityLatest, 0) / launches.length : 0;
   const avgTdp = launches.length ? launches.reduce((s, l) => s + l.tdpLatest, 0) / launches.length : 0;
+  const survivalRate = launches.length
+    ? launches.filter((l) => l.survived26w !== false).length / launches.length
+    : 0;
+
+  // Dynamic retailer bullets from data
+  const cats = [...new Set(launches.map((l) => l.category))];
+  const benchmarks = CATEGORY_BENCHMARKS.filter((b) => cats.includes(b.category));
+  const blendedVel = benchmarks.length > 0
+    ? benchmarks.reduce((s, b) => s + b.medianVelocity12w, 0) / benchmarks.length
+    : null;
+  const blendedSurv = benchmarks.length > 0
+    ? benchmarks.reduce((s, b) => s + b.survivalRate26w, 0) / benchmarks.length
+    : null;
+  const avgPromo = launches.length ? launches.reduce((s, l) => s + l.promoDependency, 0) / launches.length : 0;
+
+  // Dynamic attribute bullets
+  const topAttrs = ATTR_KEYS.filter((a) => {
+    const pct = launches.length ? launches.filter((l) => matchesAttr(l, a)).length / launches.length : 0;
+    return pct >= 0.5; // attribute in ≥50% of selected launches
+  });
+
+  const bullets: string[] = [];
+  if (blendedVel && avgVelocity > 0) {
+    const idx = avgVelocity / blendedVel;
+    bullets.push(
+      `Avg velocity ${fmt$(avgVelocity)}/store/wk — ${idx.toFixed(1)}× category median (${fmt$(blendedVel)})`
+    );
+  }
+  if (avgPromo < 0.25) {
+    bullets.push(
+      `Low promo dependency (${Math.round(avgPromo * 100)}%) — demand driven by full-price repeat purchase`
+    );
+  } else {
+    bullets.push(`Distribution-first launch strategy — sustainable velocity not dependent on promotions`);
+  }
+  if (blendedSurv && survivalRate > 0) {
+    const idx = (survivalRate / blendedSurv).toFixed(1);
+    bullets.push(
+      `${Math.round(survivalRate * 100)}% 26-week survival rate — ${idx}× vs. category average of ${Math.round(blendedSurv * 100)}%`
+    );
+  } else if (survivalRate > 0) {
+    bullets.push(`${Math.round(survivalRate * 100)}% of launches survived past 26 weeks`);
+  }
+  if (topAttrs.length > 0) {
+    bullets.push(
+      `Consistently delivers against consumer demand: ${topAttrs.join(", ")} across ≥50% of the range`
+    );
+  }
+  if (bullets.length === 0) {
+    bullets.push("Select launches to generate data-driven sell bullets");
+  }
 
   return (
     <div className="space-y-4 text-slate-700">
       <div className="border-b border-slate-200 pb-3">
         <div className="text-[10px] font-medium text-green-600 uppercase tracking-wide mb-1">Retailer Sell Story</div>
         <h1 className="text-lg font-bold text-slate-900">Why {brandName || "Our Brand"} Wins on Shelf</h1>
-        <div className="text-xs text-slate-400 mt-0.5">Innovation performance · powered by SPINS data</div>
+        <div className="text-xs text-slate-400 mt-0.5">
+          Innovation performance · powered by SPINS POS + Attribute data
+        </div>
       </div>
 
       {context && (
@@ -155,7 +230,7 @@ function RetailerSellPreview({
         <MetricBox label="Avg Distribution" value={`${Math.round(avgTdp)}`} sub="TDP at 12w" />
         <MetricBox
           label="Survival Rate"
-          value={launches.length ? fmtPct(launches.filter((l) => l.survived26w !== false).length / launches.length, 0) : "—"}
+          value={launches.length ? fmtPct(survivalRate, 0) : "—"}
           sub="26-week"
         />
       </div>
@@ -164,7 +239,14 @@ function RetailerSellPreview({
         <div className="border border-blue-200 bg-blue-50 rounded-lg p-4">
           <div className="text-[10px] font-medium text-blue-600 mb-1">HERO SKU</div>
           <div className="text-sm font-bold text-slate-800">{topLaunch.description}</div>
-          <div className="text-xs text-slate-500 mt-0.5">{topLaunch.category} · Quality Score: {topLaunch.launchQualityScore}/100</div>
+          <div className="text-xs text-slate-500 mt-0.5">
+            {topLaunch.category} · Quality Score: {topLaunch.launchQualityScore}/100
+            {blendedVel && (
+              <span className="ml-2 text-blue-600 font-medium">
+                · {(topLaunch.velocityLatest / blendedVel).toFixed(1)}× cat. median velocity
+              </span>
+            )}
+          </div>
           <div className="grid grid-cols-3 gap-2 mt-3">
             <div>
               <div className="text-[10px] text-slate-400">Velocity</div>
@@ -183,12 +265,11 @@ function RetailerSellPreview({
       )}
 
       <div className="space-y-2">
-        <div className="text-xs font-semibold text-slate-600">Why This Range Belongs on Your Shelf</div>
-        {[
-          "Consistently above-category velocity driven by strong consumer demand signals",
-          "Distribution-first commercialization approach — sustainable, low promo dependency",
-          "Proven 26-week survival rate outperforms category average by 1.4×",
-        ].map((point, i) => (
+        <div className="text-xs font-semibold text-slate-600">
+          Why This Range Belongs on Your Shelf
+          <span className="ml-2 text-[10px] font-normal text-slate-400">← derived from SPINS data</span>
+        </div>
+        {bullets.map((point, i) => (
           <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
             <CheckCircle2 size={12} className="text-green-500 shrink-0 mt-0.5" />
             <span>{point}</span>

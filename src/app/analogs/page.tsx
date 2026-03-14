@@ -5,6 +5,7 @@ import type { Launch } from "@/lib/types";
 import { LAUNCHES } from "@/data/launches";
 import { findAnalogs, type AnalogResult } from "@/lib/analogs";
 import { fmt$, fmtPct, fmtGrowth, scoreColor, scoreBg, categoryColor } from "@/lib/utils";
+import { CATEGORY_BENCHMARKS } from "@/data/categories";
 import { Search, CheckCircle2, XCircle, Clock, Trophy } from "lucide-react";
 
 function OutcomePill({ launch }: { launch: Launch }) {
@@ -45,11 +46,13 @@ function ScoreBar({ value, max = 100 }: { value: number; max?: number }) {
   );
 }
 
-function WinningRanges({ analogs }: { analogs: AnalogResult[] }) {
+function WinningRanges({ analogs, category }: { analogs: AnalogResult[]; category: string }) {
   const winners = analogs.filter((a) => a.launch.survived52w === true || a.launch.survived26w === true);
   const losers = analogs.filter((a) => a.launch.survived26w === false);
 
   if (winners.length === 0) return null;
+
+  const benchmark = CATEGORY_BENCHMARKS.find((b) => b.category === category);
 
   const avgWinnerVelocity = winners.reduce((s, a) => s + a.launch.velocityLatest, 0) / winners.length;
   const avgWinnerTdp = winners.reduce((s, a) => s + a.launch.tdpLatest, 0) / winners.length;
@@ -59,26 +62,54 @@ function WinningRanges({ analogs }: { analogs: AnalogResult[] }) {
   const avgLoserVelocity = losers.length > 0 ? losers.reduce((s, a) => s + a.launch.velocityLatest, 0) / losers.length : null;
   const avgLoserTdp = losers.length > 0 ? losers.reduce((s, a) => s + a.launch.tdpLatest, 0) / losers.length : null;
 
+  // Category-benchmarked index strings
+  const velIdx = benchmark ? (avgWinnerVelocity / benchmark.medianVelocity12w).toFixed(1) : null;
+  const tdpIdx = benchmark ? (avgWinnerTdp / benchmark.medianTdp12w).toFixed(1) : null;
+  const priceIdx = benchmark ? (avgWinnerPrice / benchmark.avgPrice).toFixed(1) : null;
+
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-5">
       <h2 className="text-sm font-semibold text-slate-700 mb-1">Winning Range Benchmarks</h2>
       <p className="text-xs text-slate-400 mb-4">
-        Based on analog winners vs. losers · use as a target corridor for new concepts
+        Analog winner averages indexed vs. {category} category medians · use as a target corridor for new concepts
       </p>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: "Price Point", winner: `$${avgWinnerPrice.toFixed(2)}`, loser: null, sub: "winner avg" },
-          { label: "Velocity @ 12w", winner: `$${avgWinnerVelocity.toFixed(0)}`, loser: avgLoserVelocity ? `$${avgLoserVelocity.toFixed(0)}` : null, sub: "$/TDP/wk" },
-          { label: "Distribution", winner: `${Math.round(avgWinnerTdp)} TDP`, loser: avgLoserTdp ? `${Math.round(avgLoserTdp)} TDP` : null, sub: "at 12w" },
-          { label: "Promo Dep.", winner: `<${Math.round(avgWinnerPromo * 100 + 5)}%`, loser: null, sub: "target max" },
-        ].map(({ label, winner, loser, sub }) => (
-          <div key={label} className="border border-slate-100 rounded-lg p-3">
-            <div className="text-[10px] text-slate-400 mb-1">{label}</div>
-            <div className="text-sm font-bold text-green-600">{winner}</div>
-            {loser && <div className="text-xs text-red-500 mt-0.5">Losers: {loser}</div>}
-            <div className="text-[9px] text-slate-400 mt-0.5">{sub}</div>
-          </div>
-        ))}
+        <div className="border border-slate-100 rounded-lg p-3">
+          <div className="text-[10px] text-slate-400 mb-1">Price Point</div>
+          <div className="text-sm font-bold text-green-600">${avgWinnerPrice.toFixed(2)}</div>
+          {priceIdx && (
+            <div className="text-[9px] text-blue-600 mt-0.5">{priceIdx}× cat. avg ${benchmark!.avgPrice.toFixed(2)}</div>
+          )}
+          <div className="text-[9px] text-slate-400 mt-0.5">winner avg</div>
+        </div>
+        <div className="border border-slate-100 rounded-lg p-3">
+          <div className="text-[10px] text-slate-400 mb-1">Velocity @ 12w</div>
+          <div className="text-sm font-bold text-green-600">${avgWinnerVelocity.toFixed(0)}</div>
+          {velIdx && (
+            <div className="text-[9px] text-blue-600 mt-0.5">{velIdx}× cat. median ${benchmark!.medianVelocity12w}</div>
+          )}
+          {avgLoserVelocity && <div className="text-xs text-red-500 mt-0.5">Losers: ${avgLoserVelocity.toFixed(0)}</div>}
+          <div className="text-[9px] text-slate-400 mt-0.5">$/store/wk</div>
+        </div>
+        <div className="border border-slate-100 rounded-lg p-3">
+          <div className="text-[10px] text-slate-400 mb-1">Distribution</div>
+          <div className="text-sm font-bold text-green-600">{Math.round(avgWinnerTdp)} TDP</div>
+          {tdpIdx && (
+            <div className="text-[9px] text-blue-600 mt-0.5">{tdpIdx}× cat. median {benchmark!.medianTdp12w} TDP</div>
+          )}
+          {avgLoserTdp && <div className="text-xs text-red-500 mt-0.5">Losers: {Math.round(avgLoserTdp)} TDP</div>}
+          <div className="text-[9px] text-slate-400 mt-0.5">at 12w</div>
+        </div>
+        <div className="border border-slate-100 rounded-lg p-3">
+          <div className="text-[10px] text-slate-400 mb-1">Promo Dep.</div>
+          <div className="text-sm font-bold text-green-600">&lt;{Math.round(avgWinnerPromo * 100 + 5)}%</div>
+          {benchmark && (
+            <div className="text-[9px] text-blue-600 mt-0.5">
+              {avgWinnerPromo < 0.25 ? "below" : "above"} 25% threshold
+            </div>
+          )}
+          <div className="text-[9px] text-slate-400 mt-0.5">target max</div>
+        </div>
       </div>
     </div>
   );
@@ -243,6 +274,62 @@ export default function AnalogFinder() {
             </div>
           </div>
 
+          {/* Velocity Trajectory table */}
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <h2 className="text-sm font-semibold text-slate-700 mb-1">Analog Velocity Trajectories</h2>
+            <p className="text-xs text-slate-400 mb-4">
+              Dollar ramp at 4w, 12w, 26w for each analog — shows growth shape and distribution leverage
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="text-left pb-2 text-slate-400 font-medium">#</th>
+                    <th className="text-left pb-2 text-slate-400 font-medium">Analog</th>
+                    <th className="text-right pb-2 text-slate-400 font-medium">$4w</th>
+                    <th className="text-right pb-2 text-slate-400 font-medium">$12w</th>
+                    <th className="text-right pb-2 text-slate-400 font-medium">$26w</th>
+                    <th className="text-right pb-2 text-slate-400 font-medium">Ramp</th>
+                    <th className="text-right pb-2 text-slate-400 font-medium">Outcome</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {analogs.map((analog, idx) => {
+                    const l = analog.launch;
+                    const ramp = l.dollars26w !== null && l.dollars4w > 0
+                      ? l.dollars26w / l.dollars4w
+                      : null;
+                    const trend = l.dollars26w !== null && l.dollars12w > 0
+                      ? l.dollars26w > l.dollars12w ? "▲" : "▼"
+                      : null;
+                    const trendColor = trend === "▲" ? "text-green-600" : "text-red-500";
+                    return (
+                      <tr key={l.upc} className="border-b border-slate-50 hover:bg-slate-50">
+                        <td className="py-2 text-slate-300 font-bold text-base">{idx + 1}</td>
+                        <td className="py-2 text-slate-700 font-medium max-w-[180px] truncate">
+                          {l.description.length > 30 ? l.description.slice(0, 30) + "…" : l.description}
+                        </td>
+                        <td className="py-2 text-right text-slate-500">{fmt$(l.dollars4w)}</td>
+                        <td className="py-2 text-right text-slate-600 font-medium">{fmt$(l.dollars12w)}</td>
+                        <td className="py-2 text-right text-slate-600 font-medium">
+                          {l.dollars26w !== null ? fmt$(l.dollars26w) : <span className="text-slate-300">—</span>}
+                        </td>
+                        <td className={`py-2 text-right font-semibold ${ramp !== null && ramp >= 1.5 ? "text-green-600" : "text-slate-400"}`}>
+                          {ramp !== null ? (
+                            <span>{ramp.toFixed(1)}× {trend && <span className={trendColor}>{trend}</span>}</span>
+                          ) : "—"}
+                        </td>
+                        <td className="py-2 text-right">
+                          <OutcomePill launch={l} />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           {/* Winner vs Loser comparison */}
           {winners.length > 0 && losers.length > 0 && (
             <div className="bg-white rounded-xl border border-slate-200 p-5">
@@ -310,7 +397,7 @@ export default function AnalogFinder() {
             </div>
           )}
 
-          <WinningRanges analogs={analogs} />
+          <WinningRanges analogs={analogs} category={selectedLaunch.category} />
         </>
       )}
 

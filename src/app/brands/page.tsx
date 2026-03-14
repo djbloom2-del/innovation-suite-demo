@@ -18,8 +18,10 @@ import {
   Line,
   Legend,
 } from "recharts";
-import { fmt$, fmtPct, categoryColor } from "@/lib/utils";
-import { Trophy, Rocket, TrendingUp, Zap } from "lucide-react";
+import { fmt$, fmtPct, categoryColor, scoreHex } from "@/lib/utils";
+import { LAUNCHES, getWinners } from "@/data/launches";
+import { ATTR_KEYS, matchesAttr } from "@/data/attributes";
+import { Trophy, Rocket, TrendingUp, Zap, AlertTriangle } from "lucide-react";
 
 export default function BrandGrowthEngine() {
   const [selectedBrand, setSelectedBrand] = useState(BRANDS[0].name);
@@ -28,6 +30,33 @@ export default function BrandGrowthEngine() {
 
   const growthPct = (brand.totalDollars - brand.totalDollarsPrior) / (brand.totalDollarsPrior || 1);
   const coreGrowth = brand.totalDollars - brand.totalDollarsPrior - brand.newItemDollars;
+
+  // Brand-specific launches from LAUNCHES data
+  const brandLaunches = useMemo(
+    () => LAUNCHES.filter((l) => l.brand === selectedBrand),
+    [selectedBrand]
+  );
+
+  // Revenue at Risk: launches with sharp 12w velocity declines
+  const revenueAtRisk = useMemo(
+    () => brandLaunches.filter((l) => l.survived12w && (l.growthRate12w ?? 0) < -0.15)
+      .reduce((s, l) => s + l.dollarsLatest, 0),
+    [brandLaunches]
+  );
+
+  // Attribute Portfolio Mix: for each attribute, count rate + win rate for this brand
+  const attrPortfolio = useMemo(() => {
+    if (brandLaunches.length === 0) return [];
+    const brandWinRate = brandLaunches.length
+      ? getWinners(brandLaunches).length / brandLaunches.length
+      : 0;
+    return ATTR_KEYS.map((attr) => {
+      const withAttr  = brandLaunches.filter((l) => matchesAttr(l, attr));
+      const winRate   = withAttr.length ? getWinners(withAttr).length / withAttr.length : 0;
+      const pct       = brandLaunches.length ? withAttr.length / brandLaunches.length : 0;
+      return { attr, count: withAttr.length, pct, winRate, lift: brandWinRate > 0 ? winRate / brandWinRate : 1 };
+    }).sort((a, b) => b.pct - a.pct);
+  }, [brandLaunches]);
 
   // Proper waterfall: stacked bar with transparent base + colored change
   // coreGrowth can be negative (core declined), shown as red bar
@@ -53,6 +82,7 @@ export default function BrandGrowthEngine() {
     { icon: Rocket, label: "New Item Share", value: fmtPct(brand.pctGrowthFromNewItems, 0), color: "text-blue-600", bg: "bg-blue-50" },
     { icon: Trophy, label: "Win Rate", value: fmtPct(brand.winRate, 0), color: "text-amber-600", bg: "bg-amber-50" },
     { icon: Zap, label: "$ per Launch", value: fmt$(brand.innovationScore), color: "text-purple-600", bg: "bg-purple-50" },
+    { icon: AlertTriangle, label: "Revenue at Risk", value: fmt$(revenueAtRisk), color: revenueAtRisk > 0 ? "text-red-500" : "text-green-600", bg: "bg-red-50" },
   ];
 
   return (
@@ -77,7 +107,7 @@ export default function BrandGrowthEngine() {
       </div>
 
       {/* Scorecard row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {scoreCards.map(({ icon: Icon, label, value, color, bg }) => (
           <div key={label} className="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-3">
             <div className={`${bg} p-2 rounded-lg shrink-0`}>
@@ -176,6 +206,59 @@ export default function BrandGrowthEngine() {
           </LineChart>
         </ResponsiveContainer>
       </div>
+
+      {/* Attribute Portfolio Mix */}
+      {attrPortfolio.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <h2 className="text-sm font-semibold text-slate-700 mb-1">Attribute Portfolio Mix — {selectedBrand}</h2>
+          <p className="text-xs text-slate-400 mb-4">
+            Share of {selectedBrand} launches featuring each attribute + win rate vs. brand baseline
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-slate-100">
+                  <th className="text-left pb-2 text-slate-400 font-medium">Attribute</th>
+                  <th className="text-right pb-2 text-slate-400 font-medium"># Launches</th>
+                  <th className="text-right pb-2 text-slate-400 font-medium">Portfolio %</th>
+                  <th className="text-left pb-2 text-slate-400 font-medium pl-4">Coverage</th>
+                  <th className="text-right pb-2 text-slate-400 font-medium">Win Rate</th>
+                  <th className="text-right pb-2 text-slate-400 font-medium">Lift</th>
+                </tr>
+              </thead>
+              <tbody>
+                {attrPortfolio.map((row) => {
+                  const liftColor = row.lift >= 1.5 ? "text-green-600 font-semibold" : row.lift >= 1 ? "text-slate-600" : "text-amber-600";
+                  return (
+                    <tr key={row.attr} className="border-b border-slate-50 hover:bg-slate-50">
+                      <td className="py-2 text-slate-700 font-medium">{row.attr}</td>
+                      <td className="py-2 text-right text-slate-400">{row.count}</td>
+                      <td className="py-2 text-right text-slate-600">{Math.round(row.pct * 100)}%</td>
+                      <td className="py-2 pl-4">
+                        <div className="w-24 h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full"
+                            style={{ width: `${row.pct * 100}%`, backgroundColor: scoreHex(row.winRate * 100) }}
+                          />
+                        </div>
+                      </td>
+                      <td className="py-2 text-right font-semibold" style={{ color: scoreHex(row.winRate * 100) }}>
+                        {Math.round(row.winRate * 100)}%
+                      </td>
+                      <td className={`py-2 text-right ${liftColor}`}>{row.lift.toFixed(1)}×</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {brandLaunches.length === 0 && (
+            <div className="text-xs text-slate-400 italic text-center py-4">
+              No matching LAUNCHES data for {selectedBrand}.
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Top brands table */}
       <div className="bg-white rounded-xl border border-slate-200 p-5">

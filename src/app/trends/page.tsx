@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import type { Category } from "@/lib/types";
 import { CATEGORIES } from "@/data/categories";
+import { LAUNCHES } from "@/data/launches";
 import {
   getMonthlyLaunchCounts,
   getSurvivalCurveData,
@@ -23,7 +24,7 @@ import {
   AreaChart,
   Area,
 } from "recharts";
-import { categoryColor } from "@/lib/utils";
+import { categoryColor, fmtMonth, fmt$ } from "@/lib/utils";
 
 const ATTR_COLORS: Record<string, string> = {
   protein: "#2563eb",
@@ -40,11 +41,6 @@ const ATTR_LABELS: Record<string, string> = {
   keto: "Keto",
   vegan: "Vegan",
 };
-
-function formatMonth(dateStr: string) {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
-}
 
 export default function TrendEvolution() {
   const [selectedCategory, setSelectedCategory] = useState<Category | "All">("All");
@@ -81,12 +77,12 @@ export default function TrendEvolution() {
 
   const chartCounts = monthlyCounts.map((d) => ({
     ...d,
-    month: formatMonth(d.month),
+    month: fmtMonth(d.month),
   }));
 
   const adoptionChartData = adoptionData.map((d) => ({
     ...d,
-    month: formatMonth(d.month),
+    month: fmtMonth(d.month),
   }));
 
   return (
@@ -173,7 +169,7 @@ export default function TrendEvolution() {
                 <th className="text-left text-slate-500 font-medium pb-1 pr-3 w-28">Category</th>
                 {heatmapMonths.map((m) => (
                   <th key={m} className="text-center text-slate-400 font-normal pb-1 min-w-[52px]">
-                    {formatMonth(m)}
+                    {fmtMonth(m)}
                   </th>
                 ))}
               </tr>
@@ -216,6 +212,70 @@ export default function TrendEvolution() {
               <span>{label}</span>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Cohort Velocity Ramp table */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5">
+        <h2 className="text-sm font-semibold text-slate-700 mb-1">Cohort Velocity Ramp</h2>
+        <p className="text-xs text-slate-400 mb-4">
+          Average dollars at 4w, 12w, and 26w by launch vintage — shows how quickly each cohort ramps sales
+        </p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-slate-100">
+                <th className="text-left pb-2 text-slate-400 font-medium">Vintage</th>
+                <th className="text-right pb-2 text-slate-400 font-medium"># Launches</th>
+                <th className="text-right pb-2 text-slate-400 font-medium">Avg $4w</th>
+                <th className="text-right pb-2 text-slate-400 font-medium">Avg $12w</th>
+                <th className="text-right pb-2 text-slate-400 font-medium">Avg $26w</th>
+                <th className="text-right pb-2 text-slate-400 font-medium">Ramp 4→26w</th>
+                <th className="text-right pb-2 text-slate-400 font-medium">Median QS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(
+                [
+                  { label: "2025 H1", start: "2025-01-01", end: "2025-06-01" },
+                  { label: "2024 H2", start: "2024-07-01", end: "2024-12-01" },
+                  { label: "2024 H1", start: "2024-01-01", end: "2024-06-01" },
+                ] as const
+              ).map(({ label, start, end }) => {
+                const launches = LAUNCHES.filter(
+                  (l) => l.launchCohortMonth >= start && l.launchCohortMonth <= end
+                );
+                if (launches.length === 0) return null;
+                const avg4w  = launches.reduce((s, l) => s + l.dollars4w, 0) / launches.length;
+                const avg12w = launches.reduce((s, l) => s + l.dollars12w, 0) / launches.length;
+                const withD26 = launches.filter((l) => l.dollars26w !== null);
+                const avg26w = withD26.length > 0
+                  ? withD26.reduce((s, l) => s + (l.dollars26w ?? 0), 0) / withD26.length
+                  : null;
+                const ramp = avg4w > 0 && avg26w !== null ? avg26w / avg4w : null;
+                const scores = [...launches].map((l) => l.launchQualityScore).sort((a, b) => a - b);
+                const medianQS = scores[Math.floor(scores.length / 2)] ?? 0;
+                return (
+                  <tr key={label} className="border-b border-slate-50 hover:bg-slate-50">
+                    <td className="py-2.5 font-semibold text-slate-700">{label}</td>
+                    <td className="py-2.5 text-right text-slate-400">{launches.length}</td>
+                    <td className="py-2.5 text-right text-slate-600">{fmt$(avg4w)}</td>
+                    <td className="py-2.5 text-right text-slate-600">{fmt$(avg12w)}</td>
+                    <td className="py-2.5 text-right text-slate-600">
+                      {avg26w !== null ? fmt$(avg26w) : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className={`py-2.5 text-right font-semibold ${ramp !== null && ramp >= 1.5 ? "text-green-600" : "text-amber-600"}`}>
+                      {ramp !== null ? `${ramp.toFixed(1)}×` : "—"}
+                    </td>
+                    <td className="py-2.5 text-right text-slate-600">{medianQS}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="mt-2 text-[10px] text-slate-400">
+          Ramp = avg$26w ÷ avg$4w · &gt;1.5× indicates strong distribution-driven revenue growth
         </div>
       </div>
 
