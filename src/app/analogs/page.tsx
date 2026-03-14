@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import type { Launch } from "@/lib/types";
 import { LAUNCHES } from "@/data/launches";
 import { findAnalogs, type AnalogResult } from "@/lib/analogs";
@@ -115,9 +116,16 @@ function WinningRanges({ analogs, category }: { analogs: AnalogResult[]; categor
   );
 }
 
-export default function AnalogFinder() {
+function AnalogFinderInner() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUpc, setSelectedUpc] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const upc = searchParams.get("upc");
+    if (upc && LAUNCHES.some((l) => l.upc === upc)) {
+      setSelectedUpc(upc);
+    }
+  }, [searchParams]);
 
   const filteredLaunches = useMemo(() => {
     if (!searchQuery.trim()) return LAUNCHES.slice(0, 20);
@@ -410,4 +418,8 @@ export default function AnalogFinder() {
       )}
     </div>
   );
+}
+
+export default function AnalogFinder() {
+  return <Suspense><AnalogFinderInner /></Suspense>;
 }
