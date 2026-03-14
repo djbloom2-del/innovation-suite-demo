@@ -6,6 +6,7 @@ import { getBenchmark } from "@/data/categories";
 import { QualityScoreGauge } from "@/components/shared/QualityScoreGauge";
 import { BenchmarkBar } from "@/components/shared/BenchmarkBar";
 import { LaunchAttributeBadges } from "@/components/shared/AttributeBadge";
+import { RedditFeed } from "@/components/social/RedditFeed";
 import {
   LineChart,
   Line,
@@ -23,6 +24,33 @@ import Link from "next/link";
 interface Props {
   launch: Launch;
   onClose: () => void;
+}
+
+function buildRedditQuery(l: Launch): string {
+  const catMap: Record<string, string> = {
+    Bars: "snack bar",
+    Beverages: "drink beverage",
+    Snacks: "snack chips",
+    Supplements: "supplement",
+    "Frozen Meals": "frozen meal",
+  };
+  const parts: string[] = [catMap[l.category] ?? l.category.toLowerCase()];
+
+  if (l.attributes.functionalIngredient) {
+    parts.push(l.attributes.functionalIngredient.toLowerCase());
+  } else if (l.attributes.healthFocus) {
+    parts.push(l.attributes.healthFocus.toLowerCase());
+  }
+
+  const claim =
+    l.attributes.isOrganic        ? "organic"       :
+    l.attributes.isKeto           ? "keto"           :
+    l.attributes.isVegan          ? "vegan"          :
+    l.attributes.isGlutenFree     ? "gluten free"    :
+    l.attributes.isProteinFocused ? "high protein"   : null;
+
+  if (claim) parts.push(claim);
+  return parts.join(" ");
 }
 
 export function LaunchDetailDrawer({ launch: l, onClose }: Props) {
@@ -170,6 +198,20 @@ export function LaunchDetailDrawer({ launch: l, onClose }: Props) {
             <SearchCode size={15} />
             Find Similar Historical Launches
           </Link>
+
+          {/* Consumer Discussions */}
+          <div>
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
+              Consumer Discussions — Reddit
+            </div>
+            <RedditFeed
+              query={buildRedditQuery(l)}
+              sort="relevance"
+              timePeriod="month"
+              limit={5}
+              emptyMessage="No recent Reddit discussions found for this product type."
+            />
+          </div>
         </div>
       </div>
     </div>
