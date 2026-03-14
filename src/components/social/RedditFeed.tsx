@@ -212,19 +212,14 @@ export function RedditFeed({
 
       {/* Footer */}
       <div className="mt-3 flex items-center justify-between text-[10px] text-slate-400 border-t border-slate-50 pt-2">
-        <span>
-          Live from Reddit
-          {fetchedAt && (
-            <span className="ml-1">· Updated {fetchedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-          )}
-        </span>
+        <span>Consumer Discussions · Representative sample</span>
         <a
           href={`https://www.reddit.com/r/${subredditForLink}/search/?q=${encodeURIComponent(query)}&sort=${sort}`}
           target="_blank"
           rel="noopener noreferrer"
           className="text-blue-500 hover:text-blue-700 flex items-center gap-0.5 transition-colors"
         >
-          View more on Reddit <ExternalLink size={9} />
+          Search Reddit <ExternalLink size={9} />
         </a>
       </div>
     </div>

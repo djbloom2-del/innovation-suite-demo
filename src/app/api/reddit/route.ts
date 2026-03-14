@@ -1,42 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getSocialPosts } from "@/data/social";
+
+// Returns synthetic but realistic CPG consumer discussion posts in the same
+// shape that RedditFeed.tsx already parses: { data: { children: [{ data: ... }] } }
+//
+// Future upgrade: replace getSocialPosts() with a call to the Reddit OAuth API
+// or a social listening platform (Brandwatch, Talkwalker, etc.) — no UI changes needed.
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const q     = searchParams.get("q") ?? "";
-  const sub   = searchParams.get("sub") ?? "";
-  const sort  = searchParams.get("sort") ?? "relevance";
-  const t     = searchParams.get("t") ?? "month";
-  const limit = searchParams.get("limit") ?? "5";
+  const limit = parseInt(searchParams.get("limit") ?? "5", 10);
 
   if (!q) {
     return NextResponse.json({ error: "Missing query param q" }, { status: 400 });
   }
 
-  const base = sub
-    ? `https://www.reddit.com/r/${sub}/search.json?restrict_sr=1`
-    : `https://www.reddit.com/search.json?`;
+  const posts = getSocialPosts(q, Math.min(limit, 20));
 
-  const url = `${base}&q=${encodeURIComponent(q)}&sort=${sort}&t=${t}&limit=${limit}`;
-
-  try {
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent": "InnoSuite/1.0 (prototype demo; contact: demo@innosuite.com)",
-        "Accept": "application/json",
-      },
-      next: { revalidate: 300 }, // cache 5 minutes server-side
-    });
-
-    if (!res.ok) {
-      throw new Error(`Reddit responded with HTTP ${res.status}`);
-    }
-
-    const json = await res.json();
-    return NextResponse.json(json);
-  } catch (err) {
-    return NextResponse.json(
-      { error: String(err) },
-      { status: 502 }
-    );
-  }
+  return NextResponse.json({
+    data: {
+      children: posts.map((p) => ({ data: p })),
+    },
+  });
 }
