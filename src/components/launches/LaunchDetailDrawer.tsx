@@ -239,9 +239,9 @@ export function LaunchDetailDrawer({ launch: l, onClose }: Props) {
                 );
               })()}
             </div>
-            {growthContrib !== 0 && (
+            {l.growthRate12w != null && bench.growthRate > 0 && (
               <div className="text-[10px] text-slate-500 bg-slate-50 rounded-lg px-2.5 py-2">
-                This item accounts for ~{(growthContrib * 100).toFixed(1)}pp of {l.category}&apos;s growth
+                Growing at <span className="font-semibold text-slate-700">{(l.growthRate12w / bench.growthRate).toFixed(1)}×</span> the {l.category} category rate
               </div>
             )}
           </div>
