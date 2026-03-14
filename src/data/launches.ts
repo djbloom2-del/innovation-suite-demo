@@ -1,5 +1,8 @@
 import type { Launch, AttributeSet } from "@/lib/types";
 
+// Snapshot date used for all relative-date calculations (launch age, cohort months, etc.)
+export const DATA_SNAPSHOT_DATE = "2026-03-08";
+
 // Deterministic seeded RNG
 function rng(seed: number) {
   let s = seed;
@@ -10,7 +13,7 @@ function rng(seed: number) {
 }
 
 function daysAgo(n: number): string {
-  const d = new Date("2026-03-08");
+  const d = new Date(DATA_SNAPSHOT_DATE);
   d.setDate(d.getDate() - n);
   return d.toISOString().split("T")[0];
 }
@@ -25,7 +28,7 @@ function cohortMonth(launchDate: string): string {
 
 function ageWeeksFrom(launchDate: string): number {
   const launch = new Date(launchDate);
-  const now = new Date("2026-03-08");
+  const now = new Date(DATA_SNAPSHOT_DATE);
   return Math.floor((now.getTime() - launch.getTime()) / (7 * 24 * 60 * 60 * 1000));
 }
 
@@ -109,8 +112,6 @@ function buildLaunch(spec: LaunchSpec, peers: Launch[] = []): Launch {
     baseMix * 100 * 0.15 +
     survivalScore * 100 * 0.1
   );
-
-  const priceIndexVsCategory = spec.priceLatest / (spec.priceLatest * (0.85 + r() * 0.3));
 
   return {
     upc: spec.upc,

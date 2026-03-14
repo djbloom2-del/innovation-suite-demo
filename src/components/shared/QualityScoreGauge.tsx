@@ -1,6 +1,6 @@
 "use client";
 
-import { cn, scoreBg } from "@/lib/utils";
+import { cn, scoreBg, scoreHex } from "@/lib/utils";
 
 interface Props {
   score: number;
@@ -20,8 +20,7 @@ export function QualityScoreGauge({ score, size = "md", showLabel = true }: Prop
   const circ = 2 * Math.PI * radius;
   const dashOffset = circ * (1 - score / 100);
 
-  const strokeColor =
-    score >= 75 ? "#16a34a" : score >= 50 ? "#2563eb" : score >= 25 ? "#d97706" : "#dc2626";
+  const strokeColor = scoreHex(score);
 
   return (
     <div className={cn("relative flex items-center justify-center", sz.outer)}>

@@ -1,5 +1,21 @@
 import type { AttributePerf, AttributeCombo, Category } from "@/lib/types";
+import type { Launch } from "@/lib/types";
 import { LAUNCHES, getWinners } from "./launches";
+
+// ─── Shared attribute keys + matcher (used by winner-dna and whitespace pages) ─
+export const ATTR_KEYS = ["Organic", "Non-GMO", "Gluten-Free", "Vegan", "Keto", "Protein"] as const;
+export type AttrKey = typeof ATTR_KEYS[number];
+
+export function matchesAttr(l: Launch, attr: AttrKey): boolean {
+  const a = l.attributes;
+  if (attr === "Organic")     return a.isOrganic;
+  if (attr === "Non-GMO")     return a.isNonGmo;
+  if (attr === "Gluten-Free") return a.isGlutenFree;
+  if (attr === "Vegan")       return a.isVegan;
+  if (attr === "Keto")        return a.isKeto;
+  if (attr === "Protein")     return a.isProteinFocused;
+  return false;
+}
 
 function buildAttributePerf(
   attrName: string,

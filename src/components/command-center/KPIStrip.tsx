@@ -1,5 +1,5 @@
 import { Rocket, TrendingUp, Award, Sparkles } from "lucide-react";
-import { LAUNCHES, getRecentLaunches, getBreakoutLaunches } from "@/data/launches";
+import { LAUNCHES, getWinners, getRecentLaunches, getBreakoutLaunches } from "@/data/launches";
 import { getTopBrandsByGrowth } from "@/data/brands";
 import { fmt$ } from "@/lib/utils";
 
@@ -7,8 +7,8 @@ export function KPIStrip() {
   const recent = getRecentLaunches(8);
   const breakouts = getBreakoutLaunches(5);
   const topBrands = getTopBrandsByGrowth(3);
-  const emergingCount = LAUNCHES.filter(
-    (l) => l.attributes.functionalIngredient && l.ageWeeks <= 26 && l.launchQualityScore >= 60
+  const emergingCount = getWinners(
+    LAUNCHES.filter((l) => !!l.attributes.functionalIngredient && l.ageWeeks <= 26)
   ).length;
 
   const kpis = [
