@@ -5,11 +5,10 @@ import type { Category, Launch } from "@/lib/types";
 import { CATEGORIES } from "@/data/categories";
 import {
   getTopAttributesByWinRate,
-  getRisingUnderpenetrated,
   ATTRIBUTE_COMBOS,
 } from "@/data/attributes";
 import { LAUNCHES, getWinners } from "@/data/launches";
-import { fmt$, scoreBg } from "@/lib/utils";
+import { fmt$, fmtPct, scoreBg } from "@/lib/utils";
 import {
   BarChart,
   Bar,
@@ -24,7 +23,7 @@ import {
   CartesianGrid,
   ReferenceLine,
 } from "recharts";
-import { TrendingUp, Zap, ListFilter } from "lucide-react";
+import { Zap, ListFilter, ShieldCheck } from "lucide-react";
 
 const ATTR_COLORS = [
   "#2563eb","#16a34a","#7c3aed","#d97706","#0891b2","#db2777","#059669","#9333ea",
@@ -58,13 +57,35 @@ export default function WinnerDNA() {
 
   // ── Explorer state ──
   const [selectedAttrs, setSelectedAttrs] = useState<AttrKey[]>([]);
-  const [explorerCat, setExplorerCat] = useState<Category>("Bars");
 
   const topAttrs = useMemo(
     () => getTopAttributesByWinRate(category, 12),
     [category]
   );
-  const rising = useMemo(() => getRisingUnderpenetrated(category), [category]);
+
+  // ── Attribute Scorecard ──
+  const attrScorecard = useMemo(() => {
+    const catLaunches = LAUNCHES.filter((l) => l.category === category);
+    const catWinners  = getWinners(catLaunches);
+    const catWinRate  = catLaunches.length ? catWinners.length / catLaunches.length : 0;
+
+    return ATTR_KEYS.map((attr) => {
+      const withAttr    = catLaunches.filter((l) => matchesAttr(l, attr));
+      const attrWinners = getWinners(withAttr);
+      const winRate     = withAttr.length ? attrWinners.length / withAttr.length : 0;
+      const survived26  = withAttr.filter((l) => l.survived26w !== null);
+      const survivalRate = survived26.length
+        ? survived26.filter((l) => l.survived26w).length / survived26.length
+        : 0;
+      const priceIdx = withAttr.length
+        ? withAttr.reduce((s, l) => s + l.priceIndexVsCategory, 0) / withAttr.length
+        : 1;
+      const promoDep = withAttr.length
+        ? withAttr.reduce((s, l) => s + l.promoDependency, 0) / withAttr.length
+        : 0;
+      return { attr, count: withAttr.length, winRate, survivalRate, priceIdx, promoDep, catWinRate };
+    }).sort((a, b) => b.winRate - a.winRate);
+  }, [category]);
 
   const barData = topAttrs.map((a) => ({
     name: `${a.attributeName}`,
@@ -83,7 +104,7 @@ export default function WinnerDNA() {
 
   // ── Explorer data ──
   const explorerData = useMemo(() => {
-    const catLaunches = LAUNCHES.filter(l => l.category === explorerCat);
+    const catLaunches = LAUNCHES.filter(l => l.category === category);
     const catWinners  = getWinners(catLaunches);
     const catWinRate  = catLaunches.length ? catWinners.length / catLaunches.length : 0;
 
@@ -118,7 +139,7 @@ export default function WinnerDNA() {
       .slice(0, 10);
 
     return { catLaunches, catWinRate, matched, comboWinRate, lift, med26w, singleStats, chartData, topMatched };
-  }, [selectedAttrs, explorerCat]);
+  }, [selectedAttrs, category]);
 
   function toggleAttr(attr: AttrKey) {
     setSelectedAttrs(prev =>
@@ -186,33 +207,79 @@ export default function WinnerDNA() {
           </ResponsiveContainer>
         </div>
 
-        {/* Rising but underpenetrated */}
+        {/* Attribute Scorecard */}
         <div className="bg-white rounded-xl border border-slate-200 p-5">
           <div className="flex items-center gap-2 mb-1">
-            <TrendingUp size={14} className="text-green-500" />
-            <h2 className="text-sm font-semibold text-slate-700">Rising, Underpenetrated</h2>
+            <ShieldCheck size={14} className="text-blue-500" />
+            <h2 className="text-sm font-semibold text-slate-700">Attribute Scorecard</h2>
           </div>
           <p className="text-xs text-slate-400 mb-4">
-            High win rate, trend=rising, &lt;35% of launches.
+            Win rate, survival, price premium &amp; promo dependency per claim — {category}
           </p>
-          {rising.length === 0 ? (
-            <p className="text-xs text-slate-400">None found for this category.</p>
-          ) : (
-            <div className="space-y-3">
-              {rising.slice(0, 6).map((a, i) => (
-                <div key={i} className="p-3 bg-green-50 border border-green-100 rounded-lg">
-                  <div className="text-xs font-semibold text-green-800">{a.attributeName}</div>
-                  <div className="text-[10px] text-green-600 mt-0.5">
-                    Win rate: {Math.round(a.winRate * 100)}% · Only in{" "}
-                    {Math.round(a.penetrationRate * 100)}% of launches
-                  </div>
-                  <div className="text-[10px] text-green-500">
-                    {a.overindexVsAll.toFixed(1)}× overindex
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-slate-100">
+                  <th className="text-left pb-2 text-slate-400 font-medium">Attribute</th>
+                  <th className="text-right pb-2 text-slate-400 font-medium">#</th>
+                  <th className="text-right pb-2 text-slate-400 font-medium">Win%</th>
+                  <th className="text-right pb-2 text-slate-400 font-medium">Surv@26w</th>
+                  <th className="text-right pb-2 text-slate-400 font-medium">Price</th>
+                  <th className="text-right pb-2 text-slate-400 font-medium">Promo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {attrScorecard.map((row) => {
+                  const wrColor = row.winRate >= row.catWinRate + 0.05
+                    ? "text-green-600 font-semibold"
+                    : row.winRate >= row.catWinRate - 0.05
+                    ? "text-slate-600"
+                    : "text-red-500";
+                  const survColor = row.survivalRate >= 0.7
+                    ? "text-green-600 font-semibold"
+                    : row.survivalRate >= 0.5
+                    ? "text-amber-600"
+                    : "text-red-500";
+                  const priceColor = row.priceIdx > 1.1
+                    ? "text-green-600 font-semibold"
+                    : row.priceIdx < 0.9
+                    ? "text-amber-600"
+                    : "text-slate-600";
+                  const promoColor = row.promoDep < 0.2
+                    ? "text-green-600 font-semibold"
+                    : row.promoDep <= 0.35
+                    ? "text-amber-600"
+                    : "text-red-500";
+                  return (
+                    <tr key={row.attr} className="border-b border-slate-50 hover:bg-slate-50">
+                      <td className="py-2 text-slate-700 font-medium">{row.attr}</td>
+                      <td className="py-2 text-right text-slate-400">{row.count}</td>
+                      <td className={`py-2 text-right ${wrColor}`}>{Math.round(row.winRate * 100)}%</td>
+                      <td className={`py-2 text-right ${survColor}`}>
+                        {row.survivalRate > 0 ? Math.round(row.survivalRate * 100) + "%" : "—"}
+                      </td>
+                      <td className={`py-2 text-right ${priceColor}`}>{row.priceIdx.toFixed(2)}×</td>
+                      <td className={`py-2 text-right ${promoColor}`}>{fmtPct(row.promoDep, 0)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-slate-200">
+                  <td colSpan={2} className="pt-2 text-[10px] text-slate-400">Category baseline</td>
+                  <td className="pt-2 text-right text-[10px] text-slate-500 font-medium">
+                    {attrScorecard.length > 0 ? Math.round(attrScorecard[0].catWinRate * 100) + "%" : "—"}
+                  </td>
+                  <td colSpan={3} />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-3 text-[10px] text-slate-400">
+            <span><span className="text-green-600 font-semibold">Green</span> = above threshold</span>
+            <span><span className="text-amber-600">Amber</span> = mid range</span>
+            <span><span className="text-red-500">Red</span> = watch</span>
+          </div>
         </div>
       </div>
 
@@ -291,22 +358,6 @@ export default function WinnerDNA() {
               </p>
             </div>
           </div>
-          {/* Explorer category pills */}
-          <div className="flex gap-1.5 flex-wrap">
-            {CATEGORIES.map(c => (
-              <button
-                key={c}
-                onClick={() => setExplorerCat(c)}
-                className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                  explorerCat === c
-                    ? "bg-blue-600 text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
-                {c}
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* Attribute toggle pills */}
@@ -350,7 +401,7 @@ export default function WinnerDNA() {
                   {explorerData.matched.length}
                   <span className="text-xs font-normal text-slate-400 ml-1">/ {explorerData.catLaunches.length}</span>
                 </div>
-                <div className="text-[10px] text-slate-400 mt-0.5">in {explorerCat}</div>
+                <div className="text-[10px] text-slate-400 mt-0.5">in {category}</div>
               </div>
               <div className="bg-slate-50 rounded-lg p-3">
                 <div className="text-[10px] text-slate-400 uppercase tracking-wide mb-0.5">Win Rate</div>
@@ -443,7 +494,7 @@ export default function WinnerDNA() {
                 </p>
                 {explorerData.matched.length === 0 ? (
                   <div className="text-xs text-slate-400 italic">
-                    No launches match this combination in {explorerCat}.
+                    No launches match this combination in {category}.
                   </div>
                 ) : (
                   <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">

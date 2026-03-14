@@ -152,6 +152,8 @@ export default function WhitespaceLab() {
   const [sortBriefs,  setSortBriefs]  = useState<"opportunity" | "winRate" | "prize">("opportunity");
   const [comboAttrs,  setComboAttrs]  = useState<AttrKey[]>([]);
   const [comboCat,    setComboCat]    = useState<Category>("Bars");
+  const [briefSearch,  setBriefSearch]  = useState<string>("");
+  const [briefShowAll, setBriefShowAll] = useState<boolean>(false);
 
   // ── useMemo: briefCards ──────────────────────────────────────────────────
   const briefCards = useMemo(() => {
@@ -247,6 +249,17 @@ export default function WhitespaceLab() {
 
     return { catLaunches, catWinRate, comboWinRate, comboPenetration, lift, comboPrize, topMatched };
   }, [comboAttrs, comboCat]);
+
+  // ── Brief search / display derivations ───────────────────────────────────
+  const searchActive   = briefSearch.trim().length > 0;
+  const filteredBriefs = searchActive
+    ? briefCards.filter((c) =>
+        [c.name, c.label, c.category, c.description]
+          .some((s) => s.toLowerCase().includes(briefSearch.toLowerCase()))
+      )
+    : briefCards;
+  const displayedBriefs = searchActive || briefShowAll ? filteredBriefs : filteredBriefs.slice(0, 9);
+  const hiddenCount      = filteredBriefs.length - displayedBriefs.length;
 
   // ── Pill helper ──────────────────────────────────────────────────────────
   const pillCls = (active: boolean) =>
@@ -360,127 +373,7 @@ export default function WhitespaceLab() {
         </div>
       </div>
 
-      {/* ── Section 2: Opportunity Brief Gallery ──────────────────────────── */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
-          <div>
-            <div className="flex items-center gap-2 mb-0.5">
-              <Lightbulb size={15} className="text-amber-500" />
-              <h2 className="text-sm font-semibold text-slate-700">Innovation Opportunity Briefs</h2>
-            </div>
-            <p className="text-xs text-slate-400">
-              {briefCards.length} opportunit{briefCards.length === 1 ? "y" : "ies"} — filter and sort to find your own insights
-            </p>
-          </div>
-          <select
-            value={sortBriefs}
-            onChange={(e) => setSortBriefs(e.target.value as "opportunity" | "winRate" | "prize")}
-            className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
-          >
-            <option value="opportunity">Sort: Opportunity Score</option>
-            <option value="winRate">Sort: Win Rate</option>
-            <option value="prize">Sort: Est. Prize</option>
-          </select>
-        </div>
-
-        {/* Filter pills */}
-        <div className="flex flex-wrap gap-2 mb-4">
-          <div className="flex flex-wrap gap-1">
-            {["All", ...CATEGORIES].map((cat) => (
-              <button key={cat} onClick={() => setBriefCat(cat)} className={pillCls(briefCat === cat)}>{cat}</button>
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {["All", "Rising", "Stable", "Declining"].map((t) => (
-              <button key={t} onClick={() => setBriefTrend(t)} className={pillCls(briefTrend === t)}>{t}</button>
-            ))}
-          </div>
-        </div>
-
-        {/* Brief card grid */}
-        {briefCards.length === 0 ? (
-          <div className="py-12 text-center text-xs text-slate-400">No opportunities match the current filters.</div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {briefCards.map((card) => (
-              <div
-                key={card.id}
-                className="border border-slate-100 rounded-xl p-4 hover:border-blue-200 hover:shadow-sm transition-all flex flex-col"
-              >
-                {/* Card header */}
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span
-                      className="text-[10px] font-medium px-2 py-0.5 rounded-full text-white"
-                      style={{ backgroundColor: categoryColor(card.category) }}
-                    >
-                      {card.category}
-                    </span>
-                    {card.isFeatured && (
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">★ Featured</span>
-                    )}
-                    <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full ${trendChipClass(card.trend)}`}>
-                      {card.trend.charAt(0).toUpperCase() + card.trend.slice(1)}
-                    </span>
-                  </div>
-                  <WhitespaceBadge score={card.score} />
-                </div>
-
-                {/* Name + label */}
-                <div className="mb-2">
-                  <div className="text-sm font-bold text-slate-800 leading-tight">{card.name}</div>
-                  <div className="text-[10px] text-slate-400">{card.label}</div>
-                </div>
-
-                {/* Description */}
-                <p className="text-xs text-slate-600 leading-relaxed mb-3 flex-1">{card.description}</p>
-
-                {/* Stats row */}
-                <div className="grid grid-cols-4 gap-1 pt-3 border-t border-slate-50 mb-3">
-                  <div className="text-center">
-                    <div className="text-xs font-bold text-green-600">{Math.round(card.winRate * 100)}%</div>
-                    <div className="text-[9px] text-slate-400">Win Rate</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-xs font-bold text-slate-700">{Math.round(card.penetrationRate * 100)}%</div>
-                    <div className="text-[9px] text-slate-400">Penetration</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-xs font-bold text-blue-600">{card.overindex.toFixed(1)}×</div>
-                    <div className="text-[9px] text-slate-400">Overindex</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-xs font-bold text-purple-600">{fmt$(card.prize)}</div>
-                    <div className="text-[9px] text-slate-400">Est. Prize</div>
-                  </div>
-                </div>
-
-                {/* Example launches */}
-                {card.examples.length > 0 && (
-                  <div>
-                    <div className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Example Launches</div>
-                    <div className="space-y-1">
-                      {card.examples.map((ex) => (
-                        <div key={ex.upc} className="flex items-center gap-2 text-[10px]">
-                          <span className="text-slate-600 truncate flex-1">{ex.description}</span>
-                          <span className={`shrink-0 text-[9px] font-bold px-1 py-0.5 rounded border ${scoreBg(ex.launchQualityScore)}`}>
-                            {ex.launchQualityScore}
-                          </span>
-                          {ex.survived26w && (
-                            <span className="shrink-0 text-green-600 font-bold">✓</span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* ── Section 3: Attribute Combo Whitespace Finder ─────────────────── */}
+      {/* ── Section 2: Attribute Combo Whitespace Finder ─────────────────── */}
       <div className="bg-white rounded-xl border border-slate-200 p-5">
         <div className="flex items-center gap-2 mb-1">
           <Layers size={15} className="text-blue-500" />
@@ -622,6 +515,159 @@ export default function WhitespaceLab() {
               </div>
             )}
           </>
+        )}
+      </div>
+
+      {/* ── Section 3: Opportunity Brief Gallery ──────────────────────────── */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+          <div>
+            <div className="flex items-center gap-2 mb-0.5">
+              <Lightbulb size={15} className="text-amber-500" />
+              <h2 className="text-sm font-semibold text-slate-700">Innovation Opportunity Briefs</h2>
+            </div>
+            <p className="text-xs text-slate-400">
+              {searchActive
+                ? `${filteredBriefs.length} match${filteredBriefs.length === 1 ? "" : "es"} for "${briefSearch}"`
+                : `${briefCards.length} opportunit${briefCards.length === 1 ? "y" : "ies"} — filter, search, or sort to find your own insights`}
+            </p>
+          </div>
+          <select
+            value={sortBriefs}
+            onChange={(e) => { setSortBriefs(e.target.value as "opportunity" | "winRate" | "prize"); setBriefShowAll(false); }}
+            className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+          >
+            <option value="opportunity">Sort: Opportunity Score</option>
+            <option value="winRate">Sort: Win Rate</option>
+            <option value="prize">Sort: Est. Prize</option>
+          </select>
+        </div>
+
+        {/* Filter pills */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          <div className="flex flex-wrap gap-1">
+            {["All", ...CATEGORIES].map((cat) => (
+              <button key={cat} onClick={() => { setBriefCat(cat); setBriefShowAll(false); }} className={pillCls(briefCat === cat)}>{cat}</button>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {["All", "Rising", "Stable", "Declining"].map((t) => (
+              <button key={t} onClick={() => { setBriefTrend(t); setBriefShowAll(false); }} className={pillCls(briefTrend === t)}>{t}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Search input */}
+        <div className="relative mb-4">
+          <input
+            type="text"
+            placeholder="Search by attribute, category, or keyword…"
+            value={briefSearch}
+            onChange={(e) => { setBriefSearch(e.target.value); setBriefShowAll(false); }}
+            className="w-full text-xs border border-slate-200 rounded-lg pl-3 pr-8 py-2 focus:outline-none focus:ring-1 focus:ring-blue-400 text-slate-700 placeholder-slate-400"
+          />
+          {briefSearch && (
+            <button
+              onClick={() => setBriefSearch("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-base leading-none"
+            >×</button>
+          )}
+        </div>
+
+        {/* Brief card grid */}
+        {filteredBriefs.length === 0 ? (
+          <div className="py-12 text-center text-xs text-slate-400">
+            {searchActive ? `No briefs match "${briefSearch}".` : "No opportunities match the current filters."}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {displayedBriefs.map((card) => (
+              <div
+                key={card.id}
+                className="border border-slate-100 rounded-xl p-4 hover:border-blue-200 hover:shadow-sm transition-all flex flex-col"
+              >
+                {/* Card header */}
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span
+                      className="text-[10px] font-medium px-2 py-0.5 rounded-full text-white"
+                      style={{ backgroundColor: categoryColor(card.category) }}
+                    >
+                      {card.category}
+                    </span>
+                    {card.isFeatured && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">★ Featured</span>
+                    )}
+                    <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full ${trendChipClass(card.trend)}`}>
+                      {card.trend.charAt(0).toUpperCase() + card.trend.slice(1)}
+                    </span>
+                  </div>
+                  <WhitespaceBadge score={card.score} />
+                </div>
+
+                {/* Name + label */}
+                <div className="mb-2">
+                  <div className="text-sm font-bold text-slate-800 leading-tight">{card.name}</div>
+                  <div className="text-[10px] text-slate-400">{card.label}</div>
+                </div>
+
+                {/* Description */}
+                <p className="text-xs text-slate-600 leading-relaxed mb-3 flex-1">{card.description}</p>
+
+                {/* Stats row */}
+                <div className="grid grid-cols-4 gap-1 pt-3 border-t border-slate-50 mb-3">
+                  <div className="text-center">
+                    <div className="text-xs font-bold text-green-600">{Math.round(card.winRate * 100)}%</div>
+                    <div className="text-[9px] text-slate-400">Win Rate</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xs font-bold text-slate-700">{Math.round(card.penetrationRate * 100)}%</div>
+                    <div className="text-[9px] text-slate-400">Penetration</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xs font-bold text-blue-600">{card.overindex.toFixed(1)}×</div>
+                    <div className="text-[9px] text-slate-400">Overindex</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xs font-bold text-purple-600">{fmt$(card.prize)}</div>
+                    <div className="text-[9px] text-slate-400">Est. Prize</div>
+                  </div>
+                </div>
+
+                {/* Example launches */}
+                {card.examples.length > 0 && (
+                  <div>
+                    <div className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Example Launches</div>
+                    <div className="space-y-1">
+                      {card.examples.map((ex) => (
+                        <div key={ex.upc} className="flex items-center gap-2 text-[10px]">
+                          <span className="text-slate-600 truncate flex-1">{ex.description}</span>
+                          <span className={`shrink-0 text-[9px] font-bold px-1 py-0.5 rounded border ${scoreBg(ex.launchQualityScore)}`}>
+                            {ex.launchQualityScore}
+                          </span>
+                          {ex.survived26w && (
+                            <span className="shrink-0 text-green-600 font-bold">✓</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Show more */}
+        {hiddenCount > 0 && (
+          <div className="mt-4 text-center">
+            <button
+              onClick={() => setBriefShowAll(true)}
+              className="px-4 py-2 text-xs font-medium text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-300 rounded-lg transition-colors"
+            >
+              Show {hiddenCount} more →
+            </button>
+          </div>
         )}
       </div>
 
