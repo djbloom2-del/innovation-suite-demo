@@ -1,4 +1,4 @@
-import type { Launch, AttributeSet } from "@/lib/types";
+import type { Launch, AttributeSet, Retailer } from "@/lib/types";
 
 // Snapshot date used for all relative-date calculations (launch age, cohort months, etc.)
 export const DATA_SNAPSHOT_DATE = "2026-03-08";
@@ -113,6 +113,19 @@ function buildLaunch(spec: LaunchSpec, peers: Launch[] = []): Launch {
     survivalScore * 100 * 0.1
   );
 
+  // Retailer channel — separate seed so existing RNG sequence is unaffected
+  const rRetailer = rng(parseInt(spec.upc.slice(-4)) * 31337);
+  const rv = rRetailer();
+  const retailerThresholds: Record<string, [number, number, number]> = {
+    Bars: [0.5, 0.8, 0.9],
+    Beverages: [0.3, 0.7, 0.8],
+    Snacks: [0.2, 0.6, 0.7],
+    Supplements: [0.6, 0.85, 0.9],
+    "Frozen Meals": [0.1, 0.6, 0.7],
+  };
+  const [t1, t2, t3] = retailerThresholds[spec.category] ?? [0.4, 0.75, 0.9];
+  const retailer = (rv < t1 ? "Natural" : rv < t2 ? "Conventional" : rv < t3 ? "Club" : "Mass") as Retailer;
+
   return {
     upc: spec.upc,
     description: spec.description,
@@ -120,6 +133,7 @@ function buildLaunch(spec: LaunchSpec, peers: Launch[] = []): Launch {
     company: spec.company,
     category: spec.category,
     subcategory: spec.subcategory,
+    retailer,
     firstSeenDate: launchDate,
     launchCohortMonth: cohortMonth(launchDate),
     ageWeeks: age,

@@ -17,6 +17,8 @@ export interface AttributeSet {
   eatingOccasion: string | null;
 }
 
+export type Retailer = "Natural" | "Conventional" | "Club" | "Mass";
+
 export interface Launch {
   upc: string;
   description: string;
@@ -24,6 +26,7 @@ export interface Launch {
   company: string;
   category: Category;
   subcategory: string;
+  retailer: Retailer;
   firstSeenDate: string; // ISO date YYYY-MM-DD
   launchCohortMonth: string; // YYYY-MM-DD (first of month)
   ageWeeks: number;
