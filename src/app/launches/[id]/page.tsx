@@ -36,6 +36,8 @@ import {
   OUTCOME_META,
   VELOCITY_TIER_META,
   cn,
+  computeQualityScoreBreakdown,
+  scoreHex,
 } from "@/lib/utils";
 
 export default function LaunchDetailPage() {
@@ -51,6 +53,18 @@ export default function LaunchDetailPage() {
   const tier = getCategoryTier(launch, LAUNCHES);
   const promoDepth = getPromoDepth(launch);
   const growthContrib = getGrowthContribution(launch, bench.growthRate);
+  const qsBreakdown = computeQualityScoreBreakdown(
+    {
+      velocityLatest: launch.velocityLatest,
+      tdpLatest:      launch.tdpLatest,
+      growthRate12w:  launch.growthRate12w,
+      baseMix:        launch.baseMix,
+      survived12w:    launch.survived12w,
+      survived26w:    launch.survived26w,
+      survived52w:    launch.survived52w,
+    },
+    bench
+  );
   const tierColors =
     tier === "Top Third"
       ? "text-emerald-700 bg-emerald-50 border-emerald-200"
@@ -452,7 +466,56 @@ export default function LaunchDetailPage() {
               </div>
             </div>
 
-            {/* 2. Milestones */}
+            {/* 2. Score Breakdown */}
+            <div className="bg-white rounded-xl border border-slate-200 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-slate-700">Quality Score Breakdown</h2>
+                <span
+                  className="text-lg font-bold"
+                  style={{ color: scoreHex(launch.launchQualityScore) }}
+                >
+                  {launch.launchQualityScore}
+                </span>
+              </div>
+              <p className="text-[9px] text-slate-400 mb-3 leading-snug">
+                50 = category median · 75 = outperforming · 100 = exceptional
+              </p>
+              <div className="space-y-2">
+                {qsBreakdown.dimensions.map((d) => (
+                  <div key={d.label} className="flex items-center gap-2">
+                    {/* Label + values */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline justify-between">
+                        <span className="text-[10px] font-medium text-slate-600">{d.label}</span>
+                        <span className="text-[9px] text-slate-400 truncate ml-1">{d.value}</span>
+                      </div>
+                      {/* Progress bar */}
+                      <div className="w-full h-1.5 bg-slate-100 rounded-full mt-0.5">
+                        <div
+                          className="h-1.5 rounded-full"
+                          style={{
+                            width: `${d.score}%`,
+                            backgroundColor: scoreHex(d.score),
+                          }}
+                        />
+                      </div>
+                    </div>
+                    {/* Sub-score + weight */}
+                    <div className="shrink-0 text-right">
+                      <div className="text-xs font-bold" style={{ color: scoreHex(d.score) }}>
+                        {d.score}
+                      </div>
+                      <div className="text-[8px] text-slate-300">{Math.round(d.weight * 100)}%</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 pt-2 border-t border-slate-100 text-[9px] text-slate-400 leading-relaxed">
+                Velocity 35% · Distribution 25% · Growth 20% · Base Mix 15% · Survival 5%
+              </div>
+            </div>
+
+            {/* 3. Milestones */}
             <div className="bg-white rounded-xl border border-slate-200 p-4">
               <h2 className="text-sm font-semibold text-slate-700 mb-3">
                 Milestones
@@ -491,7 +554,7 @@ export default function LaunchDetailPage() {
               </div>
             </div>
 
-            {/* 3. Category Tier + Peer Benchmarks */}
+            {/* 4. Category Tier + Peer Benchmarks */}
             <div className="bg-white rounded-xl border border-slate-200 p-4">
               <h2 className="text-sm font-semibold text-slate-700 mb-3">
                 Category Standing
@@ -520,7 +583,7 @@ export default function LaunchDetailPage() {
               </div>
             </div>
 
-            {/* 4. Distribution */}
+            {/* 5. Distribution */}
             <div className="bg-white rounded-xl border border-slate-200 p-4">
               <h2 className="text-sm font-semibold text-slate-700 mb-3">
                 Distribution
@@ -554,7 +617,7 @@ export default function LaunchDetailPage() {
               </div>
             </div>
 
-            {/* 5. Relative Growth (conditional) */}
+            {/* 6. Relative Growth (conditional) */}
             {launch.growthRate12w != null && bench.growthRate > 0 && (
               <div className="bg-blue-50 border border-blue-100 rounded-xl p-3.5">
                 <div className="text-xs font-semibold text-blue-700 mb-1">
@@ -569,7 +632,7 @@ export default function LaunchDetailPage() {
               </div>
             )}
 
-            {/* 6. Links */}
+            {/* 7. Links */}
             <div className="space-y-2">
               <Link
                 href={`/analogs?upc=${launch.upc}`}
