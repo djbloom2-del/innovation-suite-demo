@@ -266,23 +266,6 @@ export function LaunchFilterPanel({ filters, onChange, total }: Props) {
         </div>
       </div>
 
-      {/* Survived 26w */}
-      <div>
-        <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Survival</div>
-        <div className="flex gap-1.5">
-          <Chip
-            label="Survived 26w"
-            active={filters.survived26w === true}
-            onClick={() => set({ survived26w: filters.survived26w === true ? null : true })}
-          />
-          <Chip
-            label="Failed"
-            active={filters.survived26w === false}
-            onClick={() => set({ survived26w: filters.survived26w === false ? null : false })}
-          />
-        </div>
-      </div>
-
       {/* Clear */}
       {(filters.categories.length > 0 ||
         filters.ageBands.length > 0 ||

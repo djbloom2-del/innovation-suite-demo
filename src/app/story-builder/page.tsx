@@ -7,7 +7,7 @@ import { BRANDS } from "@/data/brands";
 import { fmt$, fmtPct, fmtGrowth, scoreColor } from "@/lib/utils";
 import { CATEGORY_BENCHMARKS } from "@/data/categories";
 import { ATTR_KEYS, matchesAttr } from "@/data/attributes";
-import { FileText, ShoppingCart, Users, Download, Copy, BarChart2, CheckCircle2 } from "lucide-react";
+import { FileText, ShoppingCart, Users, Download, Copy, CheckCircle2 } from "lucide-react";
 
 const STORY_TYPES = [
   {
@@ -558,13 +558,6 @@ export default function StoryBuilder() {
             >
               <Copy size={14} />
               Copy Summary
-            </button>
-            <button
-              onClick={() => showToast("Chart pack ready — available in the full build")}
-              className="flex items-center gap-2 text-sm px-4 py-2 border border-slate-200 text-slate-500 rounded-lg hover:border-slate-300 transition-colors"
-            >
-              <BarChart2 size={14} />
-              Download Chart Pack
             </button>
           </div>
         </div>
