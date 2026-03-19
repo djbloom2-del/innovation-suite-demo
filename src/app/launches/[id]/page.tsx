@@ -472,9 +472,9 @@ export default function LaunchDetailPage() {
                 <h2 className="text-sm font-semibold text-slate-700">Quality Score Breakdown</h2>
                 <span
                   className="text-lg font-bold"
-                  style={{ color: scoreHex(launch.launchQualityScore) }}
+                  style={{ color: scoreHex(qsBreakdown.total) }}
                 >
-                  {launch.launchQualityScore}
+                  {qsBreakdown.total}
                 </span>
               </div>
               <p className="text-[9px] text-slate-400 mb-3 leading-snug">
