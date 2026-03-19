@@ -2,9 +2,20 @@ export type Category = "Bars" | "Beverages" | "Snacks" | "Supplements" | "Frozen
 
 export type PatternType = "winner" | "steady" | "fader" | "sleeper";
 
+export type PackFormat = "Single" | "Multipack" | "Family" | "Trial" | "Variety Pack";
+
+export type InnovationType =
+  | "Flavor Extension"
+  | "New to World"
+  | "Format Extension"
+  | "Category Extension"
+  | "Pack Size Variant"
+  | "Unclassified";
+
 export interface AttributeSet {
   form: string;
   flavor: string;
+  packFormat: PackFormat;
   brandPositioning: string;
   functionalIngredient: string | null;
   isOrganic: boolean;
@@ -61,6 +72,7 @@ export interface Launch {
   distributionPercentileVsCohort: number; // 0–100
   // composite score
   launchQualityScore: number; // 0–100
+  innovationType: InnovationType;
   // attributes
   attributes: AttributeSet;
 }
@@ -163,6 +175,7 @@ export interface LaunchFilters {
   priceTiers: string[];
   survived26w: boolean | null;
   attributes: string[];
+  innovationTypes: InnovationType[];
   sortBy: "qualityScore" | "growth" | "velocity" | "distribution";
   searchQuery: string;
 }

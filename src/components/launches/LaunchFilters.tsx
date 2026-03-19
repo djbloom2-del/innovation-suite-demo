@@ -2,7 +2,8 @@
 
 import { CATEGORIES } from "@/data/categories";
 import { BRANDS } from "@/data/brands";
-import type { LaunchFilters } from "@/lib/types";
+import type { LaunchFilters, InnovationType } from "@/lib/types";
+import { INNOVATION_TYPE_META, INNOVATION_TYPES } from "@/lib/innovation";
 import { cn } from "@/lib/utils";
 import { Search, SlidersHorizontal } from "lucide-react";
 
@@ -46,6 +47,31 @@ function Chip({
       )}
     >
       {label}
+    </button>
+  );
+}
+
+function InnovationChip({
+  type,
+  active,
+  onClick,
+}: {
+  type: InnovationType;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const meta = INNOVATION_TYPE_META[type];
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "px-2.5 py-1 rounded-full border text-xs font-medium transition-colors",
+        active
+          ? `${meta.bgClass} text-white border-transparent`
+          : `bg-white ${meta.textClass} ${meta.borderClass} hover:bg-slate-50`
+      )}
+    >
+      {meta.shortLabel}
     </button>
   );
 }
@@ -147,6 +173,21 @@ export function LaunchFilterPanel({ filters, onChange, total }: Props) {
         </div>
       </div>
 
+      {/* Innovation Type */}
+      <div>
+        <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Innovation Type</div>
+        <div className="flex flex-wrap gap-1.5">
+          {INNOVATION_TYPES.filter((t) => t !== "Unclassified").map((t) => (
+            <InnovationChip
+              key={t}
+              type={t}
+              active={filters.innovationTypes.includes(t)}
+              onClick={() => set({ innovationTypes: toggle(filters.innovationTypes, t) })}
+            />
+          ))}
+        </div>
+      </div>
+
       {/* Survived 26w */}
       <div>
         <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Survival</div>
@@ -169,6 +210,7 @@ export function LaunchFilterPanel({ filters, onChange, total }: Props) {
         filters.ageBands.length > 0 ||
         filters.priceTiers.length > 0 ||
         filters.attributes.length > 0 ||
+        filters.innovationTypes.length > 0 ||
         filters.searchQuery) && (
         <button
           onClick={() =>
@@ -179,6 +221,7 @@ export function LaunchFilterPanel({ filters, onChange, total }: Props) {
               priceTiers: [],
               survived26w: null,
               attributes: [],
+              innovationTypes: [],
               sortBy: "qualityScore",
               searchQuery: "",
             })

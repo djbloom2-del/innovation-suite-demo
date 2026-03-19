@@ -12,6 +12,7 @@ import {
   type AttributeDemandSignal,
 } from "@/data/attributes";
 import { LAUNCHES, getWinners } from "@/data/launches";
+import { INNOVATION_TYPE_META, INNOVATION_TYPES } from "@/lib/innovation";
 import { fmt$, fmtPct, scoreBg, scoreHex } from "@/lib/utils";
 import {
   BarChart,
@@ -242,6 +243,36 @@ export default function WinnerDNA() {
   const winRateColor = explorerData.comboWinRate > explorerData.catWinRate
     ? "text-green-600"
     : "text-slate-700";
+
+  const innovationData = useMemo(() => {
+    const catLaunches = LAUNCHES.filter((l) => l.category === category);
+    return INNOVATION_TYPES
+      .filter((t) => t !== "Unclassified")
+      .map((type) => {
+        const group = catLaunches.filter((l) => l.innovationType === type);
+        const withSurv = group.filter((l) => l.survived26w !== null);
+        const winRate = withSurv.length > 0
+          ? withSurv.filter((l) => l.survived26w === true).length / withSurv.length
+          : 0;
+        const avgScore = group.length > 0
+          ? group.reduce((s, l) => s + l.launchQualityScore, 0) / group.length
+          : 0;
+        const meta = INNOVATION_TYPE_META[type];
+        return {
+          type,
+          label: meta.shortLabel,
+          fullLabel: meta.label,
+          count: group.length,
+          winRate: Math.round(winRate * 100),
+          avgScore: Math.round(avgScore),
+          color: meta.chartColor,
+          pct: catLaunches.length > 0
+            ? Math.round((group.length / catLaunches.length) * 100)
+            : 0,
+        };
+      })
+      .sort((a, b) => b.count - a.count);
+  }, [category]);
 
   // ── Trends tab data ──
 
@@ -804,6 +835,76 @@ export default function WinnerDNA() {
                   </div>
                 </div>
               </>
+            )}
+          </div>
+
+          {/* Innovation Type Performance */}
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <h3 className="text-sm font-semibold text-slate-700 mb-0.5">
+              Innovation Type Performance
+            </h3>
+            <p className="text-xs text-slate-400 mb-4">
+              Win rates and launch mix by innovation type — {category}
+            </p>
+
+            {innovationData.every((d) => d.count === 0) ? (
+              <p className="text-xs text-slate-400 italic">No data for current filter selection.</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-6">
+
+                {/* Left panel: Launch mix */}
+                <div>
+                  <div className="text-xs font-medium text-slate-500 mb-3">Launch Mix</div>
+                  <div className="space-y-2">
+                    {innovationData.map((d) => (
+                      <div key={d.type} className="flex items-center gap-2">
+                        <div className="w-20 shrink-0 text-xs text-slate-600 truncate">{d.label}</div>
+                        <div className="flex-1 bg-slate-100 rounded-full h-4 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{
+                              width: `${d.pct}%`,
+                              backgroundColor: d.color,
+                              minWidth: d.count > 0 ? "4px" : "0",
+                            }}
+                          />
+                        </div>
+                        <div className="w-16 text-right text-xs text-slate-500 shrink-0">
+                          {d.count} <span className="text-slate-400">({d.pct}%)</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Right panel: Win rate by type */}
+                <div>
+                  <div className="text-xs font-medium text-slate-500 mb-3">Win Rate at 26 Weeks</div>
+                  <ResponsiveContainer width="100%" height={140}>
+                    <BarChart
+                      data={innovationData}
+                      layout="vertical"
+                      margin={{ top: 0, right: 40, bottom: 0, left: 0 }}
+                    >
+                      <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}%`} axisLine={false} tickLine={false} />
+                      <YAxis type="category" dataKey="label" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={52} />
+                      <Tooltip
+                        formatter={(v: any) => [`${v}%`, "Win Rate"]}
+                        contentStyle={{ fontSize: 11, border: "1px solid #e2e8f0" }}
+                      />
+                      <Bar dataKey="winRate" radius={[0, 4, 4, 0]}>
+                        {innovationData.map((d) => (
+                          <Cell key={d.type} fill={d.color} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Only launches ≥26 weeks old included in win rate
+                  </p>
+                </div>
+
+              </div>
             )}
           </div>
 

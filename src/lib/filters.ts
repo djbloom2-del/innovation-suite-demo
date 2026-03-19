@@ -50,6 +50,10 @@ export function applyLaunchFilters(launches: Launch[], filters: LaunchFilters): 
     );
   }
 
+  if (filters.innovationTypes.length > 0) {
+    result = result.filter((l) => filters.innovationTypes.includes(l.innovationType));
+  }
+
   // Sort
   result.sort((a, b) => {
     switch (filters.sortBy) {
@@ -76,6 +80,7 @@ export const DEFAULT_FILTERS: LaunchFilters = {
   priceTiers: [],
   survived26w: null,
   attributes: [],
+  innovationTypes: [],
   sortBy: "qualityScore",
   searchQuery: "",
 };
