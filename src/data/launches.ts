@@ -1,5 +1,7 @@
 import type { Launch, AttributeSet, Retailer, InnovationType, LaunchOutcome, VelocityTier } from "@/lib/types";
 import { classifyInnovationType } from "@/lib/innovation";
+import { computeQualityScore } from "@/lib/utils";
+import { getBenchmark } from "@/data/categories";
 
 type RawLaunch = Omit<Launch, "innovationType" | "velocityTier">;
 
@@ -125,15 +127,20 @@ function buildLaunch(spec: LaunchSpec, peers: Launch[] = []): RawLaunch {
     Math.round((spec.patternType === "winner" ? 60 : 42) + r() * 30)
   );
 
-  // Quality score (30% dollars pctile + 25% velocity pctile + 20% dist pctile + 15% base mix + 10% survival)
+  // Quality score — category-anchored ratios (see computeQualityScore in utils.ts)
   const baseMix = 1 - spec.promoMix;
-  const survivalScore = survived52w === true ? 1 : survived52w === false ? 0 : survived26w === true ? 0.6 : survived26w === false ? 0 : 0.3;
-  const launchQualityScore = Math.round(
-    dollarsPercentileVsCohort * 0.3 +
-    velocityPercentileVsCohort * 0.25 +
-    distributionPercentileVsCohort * 0.2 +
-    baseMix * 100 * 0.15 +
-    survivalScore * 100 * 0.1
+  const bench = getBenchmark(spec.category);
+  const launchQualityScore = computeQualityScore(
+    {
+      velocityLatest,
+      tdpLatest,
+      growthRate12w,
+      baseMix,
+      survived12w,
+      survived26w,
+      survived52w,
+    },
+    bench
   );
 
   // basePrice: separate RNG so existing r() call sequence is completely untouched
