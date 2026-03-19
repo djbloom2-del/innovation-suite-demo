@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import type { Launch, LaunchOutcome, VelocityTier } from "@/lib/types";
+import type { Launch, LaunchOutcome, VelocityTier, CategoryBenchmark } from "@/lib/types";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -150,6 +150,106 @@ export const VELOCITY_TIER_META: Record<VelocityTier, { label: string; bgClass: 
 export const LAUNCH_OUTCOMES: LaunchOutcome[] = [
   "Early Stage", "Year 1", "Successful", "Fading", "Sustaining", "Declining"
 ];
+
+// ── Quality Score (category-anchored) ─────────────────────────────────────
+
+export interface QualityScoreDimension {
+  label: string;
+  value: string;       // formatted display value (e.g. "$24.1/store")
+  benchmark: string;   // formatted benchmark (e.g. "median $31.2")
+  score: number;       // 0–100, the sub-score for this dimension
+  weight: number;      // 0–1 weight
+  contribution: number; // score * weight (unrounded)
+}
+
+export interface QualityScoreBreakdown {
+  total: number; // final rounded 0–100 score
+  dimensions: QualityScoreDimension[];
+}
+
+/**
+ * Compute the category-anchored launch quality score.
+ * Can be called with raw buildLaunch() values or a full Launch object.
+ */
+export function computeQualityScoreBreakdown(
+  params: {
+    velocityLatest: number;
+    tdpLatest: number;
+    growthRate12w: number | null;
+    baseMix: number;
+    survived12w: boolean;
+    survived26w: boolean | null;
+    survived52w: boolean | null;
+  },
+  bench: CategoryBenchmark
+): QualityScoreBreakdown {
+  const velocityScore   = Math.min(params.velocityLatest / bench.medianVelocity26w / 2, 1) * 100;
+  const distributionScore = Math.min(params.tdpLatest / bench.medianTdp12w / 2, 1) * 100;
+  const growthScore     = params.growthRate12w == null
+    ? 50
+    : Math.min(Math.max((params.growthRate12w - bench.growthRate + 0.20) / 0.40, 0), 1) * 100;
+  const baseMixScore    = params.baseMix * 100;
+  const survivalScore   = params.survived52w === true  ? 100
+    : params.survived52w === false ? 0
+    : params.survived26w === true  ? 75
+    : params.survived26w === false ? 0
+    : 50; // too early to assess
+
+  const dimensions: QualityScoreDimension[] = [
+    {
+      label: "Velocity",
+      value: `$${params.velocityLatest.toFixed(1)}/store`,
+      benchmark: `median $${bench.medianVelocity26w.toFixed(1)}`,
+      score: Math.round(velocityScore),
+      weight: 0.35,
+      contribution: velocityScore * 0.35,
+    },
+    {
+      label: "Distribution",
+      value: `${Math.round(params.tdpLatest)} TDP`,
+      benchmark: `median ${bench.medianTdp12w} TDP`,
+      score: Math.round(distributionScore),
+      weight: 0.25,
+      contribution: distributionScore * 0.25,
+    },
+    {
+      label: "Growth",
+      value: params.growthRate12w == null ? "—" : `${(params.growthRate12w * 100).toFixed(1)}%`,
+      benchmark: `category ${(bench.growthRate * 100).toFixed(0)}%`,
+      score: Math.round(growthScore),
+      weight: 0.20,
+      contribution: growthScore * 0.20,
+    },
+    {
+      label: "Base Mix",
+      value: `${(params.baseMix * 100).toFixed(0)}% base`,
+      benchmark: "100% ideal",
+      score: Math.round(baseMixScore),
+      weight: 0.15,
+      contribution: baseMixScore * 0.15,
+    },
+    {
+      label: "Survival",
+      value: params.survived52w === true ? "52w ✓" : params.survived26w === true ? "26w ✓" : params.survived12w ? "12w ✓" : "—",
+      benchmark: `${(bench.survivalRate26w * 100).toFixed(0)}% survive 26w`,
+      score: survivalScore,
+      weight: 0.05,
+      contribution: survivalScore * 0.05,
+    },
+  ];
+
+  const total = Math.round(dimensions.reduce((sum, d) => sum + d.contribution, 0));
+
+  return { total, dimensions };
+}
+
+/** Convenience wrapper — returns only the final score. Used in buildLaunch(). */
+export function computeQualityScore(
+  params: Parameters<typeof computeQualityScoreBreakdown>[0],
+  bench: CategoryBenchmark
+): number {
+  return computeQualityScoreBreakdown(params, bench).total;
+}
 
 // $ generated per total distribution point (efficiency metric)
 export function getDollarPerTdp(l: Launch): number {
