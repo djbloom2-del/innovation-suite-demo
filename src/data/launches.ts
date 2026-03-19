@@ -113,7 +113,8 @@ function buildLaunch(spec: LaunchSpec, peers: Launch[] = []): RawLaunch {
   const survived26w = age >= 26 ? pat.survivalAdj * 0.85 > r() * 0.9 : null;
   const survived52w = age >= 52 ? pat.survivalAdj * 0.7 > r() : null;
 
-  // Percentiles vs cohort (simplified from distribution)
+  // Percentiles vs cohort — used for display in Launch Detail and Alert Feed only
+  // (no longer feed launchQualityScore; see computeQualityScore in utils.ts for the current formula)
   const velocityPercentileVsCohort = Math.min(
     100,
     Math.round((spec.patternType === "winner" ? 65 : spec.patternType === "fader" ? 25 : 48) + r() * 30)
