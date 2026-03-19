@@ -13,7 +13,7 @@ import {
 } from "@/data/attributes";
 import { LAUNCHES, getWinners } from "@/data/launches";
 import { INNOVATION_TYPE_META, INNOVATION_TYPES } from "@/lib/innovation";
-import { fmt$, fmtPct, scoreBg, scoreHex } from "@/lib/utils";
+import { fmt$, fmtPct, scoreBg, scoreHex, OUTCOME_META, LAUNCH_OUTCOMES } from "@/lib/utils";
 import {
   BarChart,
   Bar,
@@ -244,15 +244,30 @@ export default function WinnerDNA() {
     ? "text-green-600"
     : "text-slate-700";
 
+  const lifecycleData = useMemo(() => {
+    return CATEGORIES.map((cat) => {
+      const catL = LAUNCHES.filter((l) => l.category === cat);
+      const row: Record<string, number | string> = { category: cat };
+      LAUNCH_OUTCOMES.forEach((o) => {
+        row[o] = catL.filter((l) => l.launchOutcome === o).length;
+      });
+      return row;
+    });
+  }, []);
+
   const innovationData = useMemo(() => {
     const catLaunches = LAUNCHES.filter((l) => l.category === category);
     return INNOVATION_TYPES
       .filter((t) => t !== "Unclassified")
       .map((type) => {
         const group = catLaunches.filter((l) => l.innovationType === type);
-        const withSurv = group.filter((l) => l.survived26w !== null);
-        const winRate = withSurv.length > 0
-          ? withSurv.filter((l) => l.survived26w === true).length / withSurv.length
+        const withOutcome = group.filter((l) =>
+          l.launchOutcome !== "Early Stage" && l.launchOutcome !== "Year 1"
+        );
+        const winRate = withOutcome.length > 0
+          ? withOutcome.filter((l) =>
+              l.launchOutcome === "Successful" || l.launchOutcome === "Sustaining"
+            ).length / withOutcome.length
           : 0;
         const avgScore = group.length > 0
           ? group.reduce((s, l) => s + l.launchQualityScore, 0) / group.length
@@ -879,7 +894,7 @@ export default function WinnerDNA() {
 
                 {/* Right panel: Win rate by type */}
                 <div>
-                  <div className="text-xs font-medium text-slate-500 mb-3">Win Rate at 26 Weeks</div>
+                  <div className="text-xs font-medium text-slate-500 mb-3">Success Rate (Y2+)</div>
                   <ResponsiveContainer width="100%" height={140}>
                     <BarChart
                       data={innovationData}
@@ -889,7 +904,7 @@ export default function WinnerDNA() {
                       <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}%`} axisLine={false} tickLine={false} />
                       <YAxis type="category" dataKey="label" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={52} />
                       <Tooltip
-                        formatter={(v: any) => [`${v}%`, "Win Rate"]}
+                        formatter={(v: any) => [`${v}%`, "Success Rate"]}
                         contentStyle={{ fontSize: 11, border: "1px solid #e2e8f0" }}
                       />
                       <Bar dataKey="winRate" radius={[0, 4, 4, 0]}>
@@ -900,12 +915,39 @@ export default function WinnerDNA() {
                     </BarChart>
                   </ResponsiveContainer>
                   <p className="text-[10px] text-slate-400 mt-1">
-                    Only launches ≥26 weeks old included in win rate
+                    Only launches with Y2+ data (≥104w) included in success rate
                   </p>
                 </div>
 
               </div>
             )}
+          </div>
+
+          {/* Launch Lifecycle Distribution */}
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <h3 className="text-sm font-semibold text-slate-700 mb-0.5">Launch Lifecycle Distribution</h3>
+            <p className="text-xs text-slate-400 mb-4">
+              How launches distribute across lifecycle stages — all categories
+            </p>
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={lifecycleData} layout="vertical" margin={{ left: 8, right: 16, top: 0, bottom: 0 }}>
+                <XAxis type="number" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="category" tick={{ fontSize: 11 }} width={90} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ fontSize: 11 }} />
+                <Legend wrapperStyle={{ fontSize: 10 }} />
+                {LAUNCH_OUTCOMES.map((o) => (
+                  <Bar key={o} dataKey={o} stackId="a" fill={OUTCOME_META[o].hex} />
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
+            <div className="flex flex-wrap gap-3 mt-3">
+              {LAUNCH_OUTCOMES.map((o) => (
+                <div key={o} className="flex items-center gap-1 text-[10px] text-slate-500">
+                  <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: OUTCOME_META[o].hex }} />
+                  {OUTCOME_META[o].label}
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Social Signals */}

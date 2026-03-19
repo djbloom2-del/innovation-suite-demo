@@ -12,6 +12,16 @@ export type InnovationType =
   | "Pack Size Variant"
   | "Unclassified";
 
+export type LaunchOutcome =
+  | "Early Stage"   // age < 52w — Y1 not complete
+  | "Year 1"        // 52 ≤ age < 104w — Y1 complete, awaiting Y2
+  | "Successful"    // 104+ weeks AND (dollarsY2 > dollarsY1 OR velocityY2 > velocityY1)
+  | "Fading"        // 104+ weeks AND Y2 criteria NOT met
+  | "Sustaining"    // 156+ weeks AND dollarsY3 > dollarsY2
+  | "Declining";    // 156+ weeks AND dollarsY3 ≤ dollarsY2
+
+export type VelocityTier = "Top" | "Mid" | "Bottom";
+
 export interface AttributeSet {
   form: string;
   flavor: string;
@@ -73,6 +83,17 @@ export interface Launch {
   // composite score
   launchQualityScore: number; // 0–100
   innovationType: InnovationType;
+  // Year-over-year lifecycle
+  dollarsY1: number | null;
+  dollarsY2: number | null;
+  dollarsY3: number | null;
+  velocityY1: number | null;
+  velocityY2: number | null;
+  velocityY3: number | null;
+  growthY1toY2: number | null;   // (dollarsY2 - dollarsY1) / dollarsY1
+  growthY2toY3: number | null;   // (dollarsY3 - dollarsY2) / dollarsY2
+  launchOutcome: LaunchOutcome;
+  velocityTier: VelocityTier;    // Top/Mid/Bottom third of category velocity
   // attributes
   attributes: AttributeSet;
 }
@@ -176,6 +197,8 @@ export interface LaunchFilters {
   survived26w: boolean | null;
   attributes: string[];
   innovationTypes: InnovationType[];
+  launchOutcomes: LaunchOutcome[];
+  velocityTiers: VelocityTier[];
   sortBy: "qualityScore" | "growth" | "velocity" | "distribution";
   searchQuery: string;
 }

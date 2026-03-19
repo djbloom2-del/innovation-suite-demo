@@ -14,6 +14,7 @@ import {
   Line,
   BarChart,
   Bar,
+  ComposedChart,
   XAxis,
   YAxis,
   Tooltip,
@@ -32,6 +33,9 @@ import {
   getCategoryTier,
   getPromoDepth,
   getGrowthContribution,
+  OUTCOME_META,
+  VELOCITY_TIER_META,
+  cn,
 } from "@/lib/utils";
 
 export default function LaunchDetailPage() {
@@ -107,6 +111,12 @@ export default function LaunchDetailPage() {
               </span>
               <span className="text-xs text-slate-400">
                 {launch.ageWeeks}w old · {launch.retailer}
+              </span>
+              <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full border", OUTCOME_META[launch.launchOutcome].bgClass)}>
+                {OUTCOME_META[launch.launchOutcome].label}
+              </span>
+              <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full border", VELOCITY_TIER_META[launch.velocityTier].bgClass)}>
+                {VELOCITY_TIER_META[launch.velocityTier].label} velocity
               </span>
             </div>
             <div className="mt-2">
@@ -185,7 +195,57 @@ export default function LaunchDetailPage() {
               </ResponsiveContainer>
             </div>
 
-            {/* 2. Competitive Position */}
+            {/* 2. Year-by-Year Performance (only for 104w+ launches) */}
+            {launch.ageWeeks >= 104 && (
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <div className="flex items-center justify-between mb-1">
+                  <h2 className="text-sm font-semibold text-slate-700">Year-by-Year Performance</h2>
+                  <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full border", OUTCOME_META[launch.launchOutcome].bgClass)}>
+                    {OUTCOME_META[launch.launchOutcome].label}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mb-4">
+                  Annual dollar revenue and velocity comparison — success requires Y2 to exceed Y1 in size or growth rate
+                </p>
+                {(() => {
+                  const yearData = [
+                    { year: "Year 1", dollars: launch.dollarsY1 ?? 0, velocity: launch.velocityY1 ?? 0, color: "#2563eb" },
+                    ...(launch.dollarsY2 != null ? [{ year: "Year 2", dollars: launch.dollarsY2, velocity: launch.velocityY2 ?? 0, color: "#0d9488" }] : []),
+                    ...(launch.dollarsY3 != null ? [{ year: "Year 3", dollars: launch.dollarsY3, velocity: launch.velocityY3 ?? 0, color: "#059669" }] : []),
+                  ];
+                  return (
+                    <div>
+                      <ResponsiveContainer width="100%" height={200}>
+                        <ComposedChart data={yearData} margin={{ top: 4, right: 48, bottom: 0, left: 8 }}>
+                          <XAxis dataKey="year" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                          <YAxis yAxisId="dollars" tick={{ fontSize: 10 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} axisLine={false} tickLine={false} />
+                          <YAxis yAxisId="velocity" orientation="right" tick={{ fontSize: 10 }} tickFormatter={(v) => `$${Number(v).toFixed(0)}`} axisLine={false} tickLine={false} />
+                          <Tooltip formatter={(v: any, name: any) => name === "dollars" ? [fmt$(v), "Annual $"] : [`$${Number(v).toFixed(1)}/store`, "Velocity"]} contentStyle={{ fontSize: 11 }} />
+                          <Bar yAxisId="dollars" dataKey="dollars" radius={[4, 4, 0, 0]}>
+                            {yearData.map((d) => <Cell key={d.year} fill={d.color} />)}
+                          </Bar>
+                          <Line yAxisId="velocity" type="monotone" dataKey="velocity" stroke="#7c3aed" strokeWidth={2} strokeDasharray="4 3" dot={{ r: 4, fill: "#7c3aed" }} />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                      <div className="flex gap-6 mt-3 text-xs text-slate-600">
+                        {launch.growthY1toY2 !== null && (
+                          <span>Y1→Y2: <span className={launch.growthY1toY2 >= 0 ? "text-teal-600 font-semibold" : "text-orange-600 font-semibold"}>
+                            {launch.growthY1toY2 >= 0 ? "+" : ""}{Math.round(launch.growthY1toY2 * 100)}%
+                          </span></span>
+                        )}
+                        {launch.growthY2toY3 !== null && (
+                          <span>Y2→Y3: <span className={launch.growthY2toY3 >= 0 ? "text-emerald-600 font-semibold" : "text-rose-600 font-semibold"}>
+                            {launch.growthY2toY3 >= 0 ? "+" : ""}{Math.round(launch.growthY2toY3 * 100)}%
+                          </span></span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* 3. Competitive Position */}
             <div className="bg-white rounded-xl border border-slate-200 p-5">
               <h2 className="text-sm font-semibold text-slate-700 mb-4">
                 Competitive Position

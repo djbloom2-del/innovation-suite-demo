@@ -2,9 +2,9 @@
 
 import { CATEGORIES } from "@/data/categories";
 import { BRANDS } from "@/data/brands";
-import type { LaunchFilters, InnovationType } from "@/lib/types";
+import type { LaunchFilters, InnovationType, LaunchOutcome, VelocityTier } from "@/lib/types";
 import { INNOVATION_TYPE_META, INNOVATION_TYPES } from "@/lib/innovation";
-import { cn } from "@/lib/utils";
+import { cn, OUTCOME_META, LAUNCH_OUTCOMES, VELOCITY_TIER_META } from "@/lib/utils";
 import { Search, SlidersHorizontal } from "lucide-react";
 
 interface Props {
@@ -72,6 +72,54 @@ function InnovationChip({
       )}
     >
       {meta.shortLabel}
+    </button>
+  );
+}
+
+function OutcomeChip({
+  outcome,
+  active,
+  onClick,
+}: {
+  outcome: LaunchOutcome;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const meta = OUTCOME_META[outcome];
+  return (
+    <button
+      onClick={onClick}
+      style={active ? { backgroundColor: meta.hex, color: "white", borderColor: "transparent" } : {}}
+      className={cn(
+        "px-2.5 py-1 rounded-full text-xs font-medium transition-colors border",
+        active ? "text-white border-transparent" : meta.bgClass
+      )}
+    >
+      {meta.label}
+    </button>
+  );
+}
+
+function VelocityChip({
+  tier,
+  active,
+  onClick,
+}: {
+  tier: VelocityTier;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const meta = VELOCITY_TIER_META[tier];
+  return (
+    <button
+      onClick={onClick}
+      style={active ? { backgroundColor: meta.hex, color: "white", borderColor: "transparent" } : {}}
+      className={cn(
+        "px-2.5 py-1 rounded-full text-xs font-medium transition-colors border",
+        active ? "text-white border-transparent" : meta.bgClass
+      )}
+    >
+      {meta.label}
     </button>
   );
 }
@@ -188,6 +236,36 @@ export function LaunchFilterPanel({ filters, onChange, total }: Props) {
         </div>
       </div>
 
+      {/* Lifecycle Outcome */}
+      <div>
+        <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Lifecycle Outcome</div>
+        <div className="flex flex-wrap gap-1.5">
+          {LAUNCH_OUTCOMES.map((o) => (
+            <OutcomeChip
+              key={o}
+              outcome={o}
+              active={filters.launchOutcomes.includes(o)}
+              onClick={() => set({ launchOutcomes: toggle(filters.launchOutcomes, o) })}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Velocity Tier */}
+      <div>
+        <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Velocity Tier</div>
+        <div className="flex gap-1.5">
+          {(["Top", "Mid", "Bottom"] as VelocityTier[]).map((tier) => (
+            <VelocityChip
+              key={tier}
+              tier={tier}
+              active={filters.velocityTiers.includes(tier)}
+              onClick={() => set({ velocityTiers: toggle(filters.velocityTiers, tier) })}
+            />
+          ))}
+        </div>
+      </div>
+
       {/* Survived 26w */}
       <div>
         <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Survival</div>
@@ -211,6 +289,8 @@ export function LaunchFilterPanel({ filters, onChange, total }: Props) {
         filters.priceTiers.length > 0 ||
         filters.attributes.length > 0 ||
         filters.innovationTypes.length > 0 ||
+        filters.launchOutcomes.length > 0 ||
+        filters.velocityTiers.length > 0 ||
         filters.searchQuery) && (
         <button
           onClick={() =>
@@ -222,6 +302,8 @@ export function LaunchFilterPanel({ filters, onChange, total }: Props) {
               survived26w: null,
               attributes: [],
               innovationTypes: [],
+              launchOutcomes: [],
+              velocityTiers: [],
               sortBy: "qualityScore",
               searchQuery: "",
             })

@@ -54,6 +54,14 @@ export function applyLaunchFilters(launches: Launch[], filters: LaunchFilters): 
     result = result.filter((l) => filters.innovationTypes.includes(l.innovationType));
   }
 
+  if (filters.launchOutcomes.length > 0) {
+    result = result.filter((l) => filters.launchOutcomes.includes(l.launchOutcome));
+  }
+
+  if (filters.velocityTiers.length > 0) {
+    result = result.filter((l) => filters.velocityTiers.includes(l.velocityTier));
+  }
+
   // Sort
   result.sort((a, b) => {
     switch (filters.sortBy) {
@@ -81,6 +89,8 @@ export const DEFAULT_FILTERS: LaunchFilters = {
   survived26w: null,
   attributes: [],
   innovationTypes: [],
+  launchOutcomes: [],
+  velocityTiers: [],
   sortBy: "qualityScore",
   searchQuery: "",
 };

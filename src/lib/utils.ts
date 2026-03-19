@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import type { Launch } from "@/lib/types";
+import type { Launch, LaunchOutcome, VelocityTier } from "@/lib/types";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -101,6 +101,55 @@ export function scoreHex(score: number): string {
   if (score >= 25) return "#d97706"; // amber-600
   return "#dc2626";                   // red-600
 }
+
+export const OUTCOME_META: Record<LaunchOutcome, { label: string; description: string; bgClass: string; hex: string }> = {
+  "Early Stage": {
+    label: "Early Stage",
+    description: "Year 1 not yet complete — outcome pending",
+    bgClass: "bg-slate-100 text-slate-600 border border-slate-300",
+    hex: "#64748b",
+  },
+  "Year 1": {
+    label: "Year 1",
+    description: "Year 1 complete, awaiting Year 2 read",
+    bgClass: "bg-indigo-50 text-indigo-700 border border-indigo-200",
+    hex: "#4f46e5",
+  },
+  "Successful": {
+    label: "Successful",
+    description: "Y2 dollars or velocity exceeded Y1",
+    bgClass: "bg-teal-50 text-teal-700 border border-teal-200",
+    hex: "#0d9488",
+  },
+  "Fading": {
+    label: "Fading",
+    description: "Y2 did not surpass Y1 in size or growth",
+    bgClass: "bg-orange-50 text-orange-700 border border-orange-200",
+    hex: "#ea580c",
+  },
+  "Sustaining": {
+    label: "Sustaining",
+    description: "Y3 dollars grew vs. Y2 — durable brand",
+    bgClass: "bg-emerald-50 text-emerald-700 border border-emerald-200",
+    hex: "#059669",
+  },
+  "Declining": {
+    label: "Declining",
+    description: "Y3 dollars fell vs. Y2",
+    bgClass: "bg-rose-50 text-rose-700 border border-rose-200",
+    hex: "#e11d48",
+  },
+};
+
+export const VELOCITY_TIER_META: Record<VelocityTier, { label: string; bgClass: string; hex: string }> = {
+  "Top":    { label: "Top Third",    bgClass: "bg-green-50 text-green-700 border border-green-200",   hex: "#16a34a" },
+  "Mid":    { label: "Mid Third",    bgClass: "bg-yellow-50 text-yellow-700 border border-yellow-200", hex: "#ca8a04" },
+  "Bottom": { label: "Bottom Third", bgClass: "bg-slate-100 text-slate-500 border border-slate-300",  hex: "#94a3b8" },
+};
+
+export const LAUNCH_OUTCOMES: LaunchOutcome[] = [
+  "Early Stage", "Year 1", "Successful", "Fading", "Sustaining", "Declining"
+];
 
 // $ generated per total distribution point (efficiency metric)
 export function getDollarPerTdp(l: Launch): number {

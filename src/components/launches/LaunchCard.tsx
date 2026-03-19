@@ -14,6 +14,8 @@ import {
   categoryColor,
   scoreBg,
   cn,
+  OUTCOME_META,
+  VELOCITY_TIER_META,
 } from "@/lib/utils";
 import { CheckCircle2, XCircle, Clock } from "lucide-react";
 
@@ -55,6 +57,15 @@ export function LaunchCard({ launch: l, onClick }: Props) {
               {l.category}
             </span>
             <span className="text-[10px] text-slate-400">{l.brand}</span>
+          </div>
+          {/* Lifecycle + Velocity badges */}
+          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+            <span className={cn("text-[9px] font-semibold px-1.5 py-0.5 rounded-full border", OUTCOME_META[l.launchOutcome].bgClass)}>
+              {OUTCOME_META[l.launchOutcome].label}
+            </span>
+            <span className={cn("text-[9px] font-medium px-1.5 py-0.5 rounded-full border", VELOCITY_TIER_META[l.velocityTier].bgClass)}>
+              {VELOCITY_TIER_META[l.velocityTier].label} vel.
+            </span>
           </div>
         </div>
         <div className="shrink-0 flex items-center gap-1 text-[10px] text-slate-400">
