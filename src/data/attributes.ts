@@ -1,5 +1,4 @@
-import type { AttributePerf, AttributeCombo, Category, AttributeIntelRecord, ComboIntelRecord } from "@/lib/types";
-import type { Launch } from "@/lib/types";
+import type { AttributePerf, AttributeCombo, Category, AttributeIntelRecord, ComboIntelRecord, Launch } from "@/lib/types";
 import { LAUNCHES, getWinners } from "./launches";
 
 // ─── Shared attribute keys + matcher (used by winner-dna and whitespace pages) ─
