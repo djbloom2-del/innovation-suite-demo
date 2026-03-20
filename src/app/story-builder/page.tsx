@@ -254,7 +254,7 @@ function RetailerSellPreview({
             </div>
             <div>
               <div className="text-[10px] text-slate-400">Distribution</div>
-              <div className="text-xs font-bold text-slate-700">{topLaunch.tdpLatest} TDP</div>
+              <div className="text-xs font-bold text-slate-700">{Math.round(topLaunch.tdpLatest)} TDP</div>
             </div>
             <div>
               <div className="text-[10px] text-slate-400">Price</div>
@@ -379,11 +379,12 @@ export default function StoryBuilder() {
 
   const filteredLaunches = useMemo(() => {
     const q = launchSearch.toLowerCase();
-    if (!q) return LAUNCHES.slice(0, 30);
+    const brandFilter = selectedBrand ? LAUNCHES.filter((l) => l.brand === selectedBrand) : LAUNCHES;
+    if (!q) return brandFilter.slice(0, 30);
     return LAUNCHES.filter(
       (l) => l.description.toLowerCase().includes(q) || l.brand.toLowerCase().includes(q)
     ).slice(0, 30);
-  }, [launchSearch]);
+  }, [launchSearch, selectedBrand]);
 
   const selectedLaunches = useMemo(
     () => LAUNCHES.filter((l) => selectedUpcs.includes(l.upc)),
@@ -462,7 +463,16 @@ export default function StoryBuilder() {
             <h3 className="text-xs font-semibold text-slate-600 mb-2">Brand</h3>
             <select
               value={selectedBrand}
-              onChange={(e) => setSelectedBrand(e.target.value)}
+              onChange={(e) => {
+                const brand = e.target.value;
+                setSelectedBrand(brand);
+                if (brand) {
+                  const brandUpcs = LAUNCHES.filter((l) => l.brand === brand).map((l) => l.upc);
+                  setSelectedUpcs(brandUpcs);
+                } else {
+                  setSelectedUpcs([]);
+                }
+              }}
               className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-400"
             >
               <option value="">Select a brand...</option>
