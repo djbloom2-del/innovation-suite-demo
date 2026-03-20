@@ -95,6 +95,16 @@ const WATERFALL_FILL: Record<WaterfallPoint["type"], string> = {
   total:    "#2563eb",
 };
 
+type TableRow = {
+  attrs: string[];
+  innovationIndex: number;
+  winRate: number;
+  lift: number;
+  launchCount: number;
+  newItemDollarShare: number;
+  existingItemDollarShare: number;
+};
+
 // ─── Component ────────────────────────────────────────────────────────────────
 export function AttributeIntelligenceSection() {
   const [selectedCat, setSelectedCat] = useState<Category>("Bars");
@@ -166,31 +176,8 @@ export function AttributeIntelligenceSection() {
   }, [baselineWinRate, singles, comboWinRate]);
 
   // ── Ranked combination table rows ─────────────────────────────────────────
-  type TableRow = {
-    attrs: string[];
-    innovationIndex: number;
-    winRate: number;
-    lift: number;
-    launchCount: number;
-    newItemDollarShare: number;
-    existingItemDollarShare: number;
-  };
-
   const tableRows = useMemo((): TableRow[] => {
-    if (pinnedAttrs.length === 0) {
-      // Default: show all-singles ranked by Innovation Index
-      return defaultSingles.map((s) => ({
-        attrs:                   [s.attr],
-        innovationIndex:         s.innovationIndex,
-        winRate:                 s.winRate,
-        lift:                    s.lift,
-        launchCount:             s.launchCount,
-        newItemDollarShare:      s.newItemDollarShare,
-        existingItemDollarShare: s.existingItemDollarShare,
-      }));
-    }
-
-    const singleRows: TableRow[] = singles.map((s) => ({
+    const toRow = (s: { attr: string; innovationIndex: number; winRate: number; lift: number; launchCount: number; newItemDollarShare: number; existingItemDollarShare: number }): TableRow => ({
       attrs:                   [s.attr],
       innovationIndex:         s.innovationIndex,
       winRate:                 s.winRate,
@@ -198,18 +185,23 @@ export function AttributeIntelligenceSection() {
       launchCount:             s.launchCount,
       newItemDollarShare:      s.newItemDollarShare,
       existingItemDollarShare: s.existingItemDollarShare,
-    }));
-
-    const comboRows: TableRow[] = combos.map((c) => ({ ...c }));
-
-    const all = [...singleRows, ...comboRows];
-
-    return all.sort((a, b) => {
-      if (comboSort === "innovationIndex") return b.innovationIndex - a.innovationIndex;
-      if (comboSort === "winRate")         return b.winRate - a.winRate;
-      if (comboSort === "lift")            return b.lift - a.lift;
-      return b.launchCount - a.launchCount;
     });
+
+    const sortRows = (rows: TableRow[]): TableRow[] =>
+      [...rows].sort((a, b) => {
+        if (comboSort === "innovationIndex") return b.innovationIndex - a.innovationIndex;
+        if (comboSort === "winRate")         return b.winRate - a.winRate;
+        if (comboSort === "lift")            return b.lift - a.lift;
+        return b.launchCount - a.launchCount;
+      });
+
+    if (pinnedAttrs.length === 0) {
+      return sortRows(defaultSingles.map(toRow));
+    }
+
+    const singleRows = singles.map(toRow);
+    const comboRows: TableRow[] = combos.map((c) => ({ ...c }));
+    return sortRows([...singleRows, ...comboRows]);
   }, [pinnedAttrs, singles, combos, defaultSingles, comboSort]);
 
   // ── Handlers ───────────────────────────────────────────────────────────────
@@ -449,7 +441,7 @@ export function AttributeIntelligenceSection() {
           <div>
             <h3 className="text-xs font-semibold text-slate-700">
               {pinnedAttrs.length === 0
-                ? `All Attributes — ${selectedCat} (ranked by Innovation Index)`
+                ? `All Attributes — ${selectedCat}`
                 : "Combination Performance Table"}
             </h3>
             <p className="text-[10px] text-slate-400 mt-0.5">
