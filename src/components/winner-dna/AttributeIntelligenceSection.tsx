@@ -165,6 +165,53 @@ export function AttributeIntelligenceSection() {
     return buildWaterfallData(baselineWinRate, singles, comboWinRate);
   }, [baselineWinRate, singles, comboWinRate]);
 
+  // ── Ranked combination table rows ─────────────────────────────────────────
+  type TableRow = {
+    attrs: string[];
+    innovationIndex: number;
+    winRate: number;
+    lift: number;
+    launchCount: number;
+    newItemDollarShare: number;
+    existingItemDollarShare: number;
+  };
+
+  const tableRows = useMemo((): TableRow[] => {
+    if (pinnedAttrs.length === 0) {
+      // Default: show all-singles ranked by Innovation Index
+      return defaultSingles.map((s) => ({
+        attrs:                   [s.attr],
+        innovationIndex:         s.innovationIndex,
+        winRate:                 s.winRate,
+        lift:                    s.lift,
+        launchCount:             s.launchCount,
+        newItemDollarShare:      s.newItemDollarShare,
+        existingItemDollarShare: s.existingItemDollarShare,
+      }));
+    }
+
+    const singleRows: TableRow[] = singles.map((s) => ({
+      attrs:                   [s.attr],
+      innovationIndex:         s.innovationIndex,
+      winRate:                 s.winRate,
+      lift:                    s.lift,
+      launchCount:             s.launchCount,
+      newItemDollarShare:      s.newItemDollarShare,
+      existingItemDollarShare: s.existingItemDollarShare,
+    }));
+
+    const comboRows: TableRow[] = combos.map((c) => ({ ...c }));
+
+    const all = [...singleRows, ...comboRows];
+
+    return all.sort((a, b) => {
+      if (comboSort === "innovationIndex") return b.innovationIndex - a.innovationIndex;
+      if (comboSort === "winRate")         return b.winRate - a.winRate;
+      if (comboSort === "lift")            return b.lift - a.lift;
+      return b.launchCount - a.launchCount;
+    });
+  }, [pinnedAttrs, singles, combos, defaultSingles, comboSort]);
+
   // ── Handlers ───────────────────────────────────────────────────────────────
   const pinAttr   = (attr: string) => { setPinnedAttrs((p) => [...p, attr]); setSearchQuery(""); };
   const unpinAttr = (attr: string) => setPinnedAttrs((p) => p.filter((a) => a !== attr));
@@ -396,8 +443,134 @@ export function AttributeIntelligenceSection() {
           </div>
         )}
       </div>
-      <div className="border border-dashed border-slate-200 rounded-xl p-6 text-center text-xs text-slate-400">
-        Ranked combo table — Task 5
+      {/* ── Ranked combo table ── */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5">
+        <div className="flex items-center justify-between gap-3 mb-1">
+          <div>
+            <h3 className="text-xs font-semibold text-slate-700">
+              {pinnedAttrs.length === 0
+                ? `All Attributes — ${selectedCat} (ranked by Innovation Index)`
+                : "Combination Performance Table"}
+            </h3>
+            <p className="text-[10px] text-slate-400 mt-0.5">
+              {pinnedAttrs.length === 0
+                ? "Pin attributes above to compare combinations"
+                : `Singles + all 2-attr and 3-attr subsets of your ${pinnedAttrs.length} pinned attributes`}
+            </p>
+          </div>
+          <select
+            value={comboSort}
+            onChange={(e) => setComboSort(e.target.value as typeof comboSort)}
+            className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 shrink-0"
+          >
+            <option value="innovationIndex">Sort: Innovation Index</option>
+            <option value="winRate">Sort: Win Rate</option>
+            <option value="lift">Sort: Lift</option>
+            <option value="launchCount">Sort: Launch Count</option>
+          </select>
+        </div>
+
+        <div className="overflow-x-auto mt-4">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-slate-100">
+                <th className="text-left pb-2 pr-4 text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+                  Attributes
+                </th>
+                <th className="text-right pb-2 px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+                  Innov. Index
+                </th>
+                <th className="text-right pb-2 px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+                  Win Rate
+                </th>
+                <th className="text-right pb-2 px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+                  Lift
+                </th>
+                <th className="text-right pb-2 px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+                  New Item $%
+                </th>
+                <th className="text-right pb-2 pl-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+                  Existing $%
+                </th>
+                <th className="text-right pb-2 pl-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+                  Launches
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {tableRows.map((row, i) => (
+                <tr
+                  key={i}
+                  className="border-b border-slate-50 hover:bg-slate-50 transition-colors"
+                >
+                  {/* Attribute badges */}
+                  <td className="py-2 pr-4">
+                    <div className="flex flex-wrap gap-1">
+                      {row.attrs.map((a) => (
+                        <span
+                          key={a}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-blue-50 text-blue-700 border border-blue-100"
+                        >
+                          {a}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  {/* Innovation Index */}
+                  <td className="py-2 px-3 text-right">
+                    <span
+                      className={`inline-block px-1.5 py-0.5 rounded border text-[10px] font-bold ${idxBg(row.innovationIndex)}`}
+                    >
+                      {row.innovationIndex}
+                    </span>
+                  </td>
+                  {/* Win Rate */}
+                  <td className="py-2 px-3 text-right font-semibold text-slate-700">
+                    {Math.round(row.winRate * 100)}%
+                  </td>
+                  {/* Lift */}
+                  <td className={`py-2 px-3 text-right font-semibold ${row.lift >= 1.5 ? "text-green-600" : row.lift >= 1 ? "text-slate-600" : "text-red-500"}`}>
+                    {row.lift.toFixed(1)}×
+                  </td>
+                  {/* New Item $ share */}
+                  <td className="py-2 px-3 text-right text-slate-600">
+                    {(row.newItemDollarShare * 100).toFixed(1)}%
+                  </td>
+                  {/* Existing Item $ share */}
+                  <td className="py-2 pl-3 text-right text-slate-600">
+                    {(row.existingItemDollarShare * 100).toFixed(1)}%
+                  </td>
+                  {/* Launch count */}
+                  <td className="py-2 pl-3 text-right text-slate-500">
+                    {row.launchCount}
+                  </td>
+                </tr>
+              ))}
+              {tableRows.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="py-8 text-center text-xs text-slate-400">
+                    No launches match this combination.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Innovation Index legend */}
+        <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-slate-50">
+          {[
+            { label: "≥130 — Emerging fast",  cls: "bg-green-50 border-green-200 text-green-700" },
+            { label: "100–129 — Innovating",  cls: "bg-emerald-50 border-emerald-200 text-emerald-700" },
+            { label: "70–99 — Neutral",       cls: "bg-amber-50 border-amber-200 text-amber-700" },
+            { label: "<70 — Entrenched",      cls: "bg-red-50 border-red-200 text-red-700" },
+          ].map(({ label, cls }) => (
+            <div key={label} className={`text-[9px] font-medium px-2 py-0.5 rounded border ${cls}`}>
+              {label}
+            </div>
+          ))}
+          <span className="text-[9px] text-slate-400 self-center">Innovation Index: 100 = equal share in new vs. existing items</span>
+        </div>
       </div>
 
     </div>
