@@ -59,14 +59,16 @@ function buildWaterfallData(
   const pct = (v: number) => Math.round(v * 1000) / 10; // fraction → 0.0–100.0
 
   const sorted = [...singles].sort(
-    (a, b) => Math.abs(b.marginalContribution) - Math.abs(a.marginalContribution),
+    (a, b) =>
+      Math.abs(b.marginalContribution) - Math.abs(a.marginalContribution) ||
+      a.attr.localeCompare(b.attr),
   );
 
   const data: WaterfallPoint[] = [];
   let running = pct(baselineWinRate);
 
   // Baseline bar — full height from 0
-  data.push({ name: "Baseline", base: 0, value: running, rawDelta: running, type: "baseline" });
+  data.push({ name: "Baseline", base: 0, value: running, rawDelta: 0, type: "baseline" });
 
   for (const s of sorted) {
     const delta = pct(s.marginalContribution);
@@ -81,7 +83,7 @@ function buildWaterfallData(
   }
 
   // Combination total — full height from 0
-  data.push({ name: "Combination", base: 0, value: pct(comboWinRate), rawDelta: pct(comboWinRate), type: "total" });
+  data.push({ name: "Combination", base: 0, value: pct(comboWinRate), rawDelta: 0, type: "total" });
 
   return data;
 }
@@ -158,10 +160,10 @@ export function AttributeIntelligenceSection() {
     );
   }, [searchQuery, pinnedAttrs]);
 
-  const waterfallData = useMemo(() => {
-    if (pinnedAttrs.length < 2) return null;
+  const waterfallData = useMemo((): WaterfallPoint[] => {
+    if (pinnedAttrs.length < 2) return [];
     return buildWaterfallData(baselineWinRate, singles, comboWinRate);
-  }, [baselineWinRate, singles, comboWinRate, pinnedAttrs.length]);
+  }, [baselineWinRate, singles, comboWinRate]);
 
   // ── Handlers ───────────────────────────────────────────────────────────────
   const pinAttr   = (attr: string) => { setPinnedAttrs((p) => [...p, attr]); setSearchQuery(""); };
@@ -314,7 +316,7 @@ export function AttributeIntelligenceSection() {
           <div className="py-10 text-center text-xs text-slate-400">
             Pin 2 or more attributes to see the waterfall.
           </div>
-        ) : !waterfallData ? null : (
+        ) : (
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={waterfallData} margin={{ top: 24, right: 16, bottom: 8, left: 8 }}>
               <XAxis
@@ -324,7 +326,7 @@ export function AttributeIntelligenceSection() {
                 tickLine={false}
               />
               <YAxis
-                domain={[0, 100]}
+                domain={[0, (dataMax: number) => Math.ceil(dataMax / 10) * 10]}
                 tickFormatter={(v) => `${v}%`}
                 tick={{ fontSize: 9, fill: "#94a3b8" }}
                 axisLine={false}
@@ -373,8 +375,8 @@ export function AttributeIntelligenceSection() {
                   fontSize={9}
                   fill="#475569"
                   formatter={(v: any) => {
-                    if (typeof v !== "number") return "";
-                    return v > 0 && v < 100 ? `+${v.toFixed(1)}pp` : v < 0 ? `${v.toFixed(1)}pp` : `${v.toFixed(1)}%`;
+                    if (typeof v !== "number" || v === 0) return "";
+                    return v > 0 ? `+${v.toFixed(1)}pp` : `${v.toFixed(1)}pp`;
                   }}
                 />
               </Bar>
