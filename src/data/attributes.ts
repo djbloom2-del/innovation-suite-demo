@@ -1,4 +1,4 @@
-import type { AttributePerf, AttributeCombo, Category } from "@/lib/types";
+import type { AttributePerf, AttributeCombo, Category, AttributeIntelRecord, ComboIntelRecord } from "@/lib/types";
 import type { Launch } from "@/lib/types";
 import { LAUNCHES, getWinners } from "./launches";
 
@@ -206,4 +206,130 @@ export function getAttributeDemandSignals(category: Category | null): AttributeD
       signal,
     };
   });
+}
+
+// ─── Dynamic attribute matcher (scales to any attribute universe) ─────────────
+export function matchesAttrDynamic(l: Launch, attrName: string): boolean {
+  const a = l.attributes;
+  if (attrName === "Organic")     return a.isOrganic;
+  if (attrName === "Non-GMO")     return a.isNonGmo;
+  if (attrName === "Gluten-Free") return a.isGlutenFree;
+  if (attrName === "Vegan")       return a.isVegan;
+  if (attrName === "Keto")        return a.isKeto;
+  if (attrName === "Protein")     return a.isProteinFocused;
+  // Future SPINS attributes added here — no UI changes required
+  return false;
+}
+
+// ─── Combination enumeration helper ──────────────────────────────────────────
+function combosOf<T>(arr: T[], k: number): T[][] {
+  if (k === 0) return [[]];
+  if (arr.length < k) return [];
+  const [first, ...rest] = arr;
+  return [
+    ...combosOf(rest, k - 1).map((c) => [first, ...c]),
+    ...combosOf(rest, k),
+  ];
+}
+
+// ─── Core intelligence computation ───────────────────────────────────────────
+
+/**
+ * Computes Innovation Index, win rate, lift, and marginal contribution for
+ * every attribute in `attrs`, plus all 2-attr and 3-attr subsets.
+ *
+ * @param catLaunches  All launches filtered to a single category
+ * @param attrs        User-pinned attribute names (any strings)
+ */
+export function computeAttributeIntelligence(
+  catLaunches: Launch[],
+  attrs: string[],
+): { singles: AttributeIntelRecord[]; combos: ComboIntelRecord[] } {
+  if (attrs.length === 0) return { singles: [], combos: [] };
+
+  const winners    = getWinners(catLaunches);
+  const winnerSet  = new Set(winners.map((w) => w.upc));
+  const baselineWR = catLaunches.length > 0 ? winners.length / catLaunches.length : 0;
+
+  const newItems      = catLaunches.filter((l) => l.ageWeeks < 52);
+  const totalNew$     = newItems.reduce((s, l) => s + l.dollarsLatest, 0);
+  const totalExisting$= catLaunches.filter((l) => l.ageWeeks >= 52).reduce((s, l) => s + l.dollarsLatest, 0);
+
+  function wrOf(pool: Launch[]): number {
+    if (!pool.length) return 0;
+    return pool.filter((l) => winnerSet.has(l.upc)).length / pool.length;
+  }
+
+  function innovIdx(pool: Launch[]): number {
+    const newWith      = pool.filter((l) => l.ageWeeks < 52);
+    const existWith    = pool.filter((l) => l.ageWeeks >= 52);
+    const newShare     = totalNew$      > 0 ? newWith.reduce((s, l)   => s + l.dollarsLatest, 0) / totalNew$      : 0;
+    const existShare   = totalExisting$ > 0 ? existWith.reduce((s, l) => s + l.dollarsLatest, 0) / totalExisting$ : 0;
+    if (existShare === 0) return newShare > 0 ? 200 : 100;
+    return Math.round((newShare / existShare) * 100);
+  }
+
+  // Full-combo win rate (used for marginal contribution)
+  const fullCombo   = catLaunches.filter((l) => attrs.every((a) => matchesAttrDynamic(l, a)));
+  const fullComboWR = wrOf(fullCombo);
+
+  // Singles
+  const singles: AttributeIntelRecord[] = attrs.map((attr) => {
+    const withAttr  = catLaunches.filter((l) => matchesAttrDynamic(l, attr));
+    // Set of all pinned attrs except this one
+    const rest      = attrs.filter((a) => a !== attr);
+    const withoutAttr = rest.length > 0
+      ? catLaunches.filter((l) => rest.every((a) => matchesAttrDynamic(l, a)))
+      : catLaunches;
+
+    const newWith    = withAttr.filter((l) => l.ageWeeks < 52);
+    const existWith  = withAttr.filter((l) => l.ageWeeks >= 52);
+    const newShare   = totalNew$      > 0 ? newWith.reduce((s, l)   => s + l.dollarsLatest, 0) / totalNew$      : 0;
+    const existShare = totalExisting$ > 0 ? existWith.reduce((s, l) => s + l.dollarsLatest, 0) / totalExisting$ : 0;
+
+    return {
+      attr,
+      innovationIndex:         innovIdx(withAttr),
+      winRate:                 wrOf(withAttr),
+      baselineWinRate:         baselineWR,
+      lift:                    baselineWR > 0 ? wrOf(withAttr) / baselineWR : 1,
+      newItemDollarShare:      newShare,
+      existingItemDollarShare: existShare,
+      launchCount:             withAttr.length,
+      penetrationRate:         catLaunches.length > 0 ? withAttr.length / catLaunches.length : 0,
+      // marginalContribution: how much does fullComboWR drop when we remove this attr?
+      marginalContribution:    attrs.length >= 2 ? fullComboWR - wrOf(withoutAttr) : 0,
+    };
+  });
+
+  // 2-attr and 3-attr combos
+  const comboSets = [...combosOf(attrs, 2), ...combosOf(attrs, 3)];
+  const combos: ComboIntelRecord[] = comboSets.map((set) => {
+    const matched = catLaunches.filter((l) => set.every((a) => matchesAttrDynamic(l, a)));
+    const newWith    = matched.filter((l) => l.ageWeeks < 52);
+    const existWith  = matched.filter((l) => l.ageWeeks >= 52);
+    return {
+      attrs:                   set,
+      innovationIndex:         innovIdx(matched),
+      winRate:                 wrOf(matched),
+      lift:                    baselineWR > 0 ? wrOf(matched) / baselineWR : 1,
+      launchCount:             matched.length,
+      newItemDollarShare:      totalNew$      > 0 ? newWith.reduce((s, l)   => s + l.dollarsLatest, 0) / totalNew$      : 0,
+      existingItemDollarShare: totalExisting$ > 0 ? existWith.reduce((s, l) => s + l.dollarsLatest, 0) / totalExisting$ : 0,
+    };
+  });
+
+  return { singles, combos };
+}
+
+/**
+ * Returns all ATTR_KEYS ranked by Innovation Index for a given category.
+ * Used for the "nothing pinned" default table view.
+ */
+export function getTopSinglesByInnovationIndex(
+  catLaunches: Launch[],
+): AttributeIntelRecord[] {
+  const allAttrs = [...ATTR_KEYS] as string[];
+  const { singles } = computeAttributeIntelligence(catLaunches, allAttrs);
+  return singles.sort((a, b) => b.innovationIndex - a.innovationIndex);
 }
