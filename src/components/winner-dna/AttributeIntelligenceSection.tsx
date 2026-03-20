@@ -10,7 +10,7 @@ import {
   computeAttributeIntelligence,
   getTopSinglesByInnovationIndex,
 } from "@/data/attributes";
-import { fmt$, fmtPct } from "@/lib/utils";
+import { fmtPct } from "@/lib/utils";
 import { Search, X } from "lucide-react";
 
 // All available attributes (expandable when SPINS data arrives)
