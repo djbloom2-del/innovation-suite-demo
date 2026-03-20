@@ -17,7 +17,7 @@ import {
   CartesianGrid,
   Legend,
 } from "recharts";
-import { X, SearchCode } from "lucide-react";
+import { X } from "lucide-react";
 import { fmt$, fmtN, fmtPct, fmtGrowth, categoryColor, getDollarPerTdp, getCategoryTier, getPromoDepth, getGrowthContribution } from "@/lib/utils";
 import { LAUNCHES } from "@/data/launches";
 import Link from "next/link";
@@ -312,15 +312,6 @@ export function LaunchDetailDrawer({ launch: l, onClose }: Props) {
             className="flex items-center justify-center gap-2 w-full py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
           >
             View Full Analysis →
-          </Link>
-
-          {/* Find Analogs */}
-          <Link
-            href={`/analogs?upc=${l.upc}`}
-            className="flex items-center justify-center gap-2 w-full py-2.5 border border-blue-200 text-blue-600 rounded-lg text-sm font-medium hover:bg-blue-50 transition-colors"
-          >
-            <SearchCode size={15} />
-            Find Similar Historical Launches
           </Link>
 
           {/* Consumer Discussions */}

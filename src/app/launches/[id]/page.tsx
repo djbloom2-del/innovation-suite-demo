@@ -635,12 +635,6 @@ export default function LaunchDetailPage() {
             {/* 7. Links */}
             <div className="space-y-2">
               <Link
-                href={`/analogs?upc=${launch.upc}`}
-                className="flex items-center justify-center gap-2 w-full py-2.5 border border-blue-200 text-blue-600 rounded-lg text-sm font-medium hover:bg-blue-50 transition-colors"
-              >
-                Find Similar Launches →
-              </Link>
-              <Link
                 href="/launches"
                 className="flex items-center justify-center gap-2 w-full py-2.5 border border-slate-200 text-slate-500 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors"
               >

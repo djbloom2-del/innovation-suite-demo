@@ -10,8 +10,7 @@ const TITLES: Record<string, { title: string; subtitle: string }> = {
   "/brands": { title: "Brand Growth Engine", subtitle: "How are brands growing?" },
   "/trends": { title: "Trend Evolution", subtitle: "What trends are actually durable?" },
   "/whitespace": { title: "Whitespace Lab", subtitle: "Where should we innovate next?" },
-  "/analogs": { title: "Analog Finder", subtitle: "What should we learn from past analogs?" },
-  "/story-builder": { title: "Story Builder", subtitle: "How do I explain this clearly?" },
+"/story-builder": { title: "Story Builder", subtitle: "How do I explain this clearly?" },
 };
 
 export function TopBar() {
