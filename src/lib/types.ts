@@ -168,6 +168,29 @@ export interface AttributeCombo {
   lift: number; // win_rate / baseline
 }
 
+export interface AttributeIntelRecord {
+  attr: string;
+  innovationIndex: number;        // (newShare / existingShare) × 100; 100 = neutral
+  winRate: number;                // win rate of launches with this attr
+  baselineWinRate: number;        // category-wide win rate (for lift)
+  lift: number;                   // winRate / baselineWinRate
+  newItemDollarShare: number;     // attr $ / total new-item $ in category
+  existingItemDollarShare: number;
+  launchCount: number;
+  penetrationRate: number;        // attr launches / all category launches
+  marginalContribution: number;   // winRate(full set) − winRate(set without this attr); 0 when < 2 pinned
+}
+
+export interface ComboIntelRecord {
+  attrs: string[];                // 2 or 3 attribute names
+  innovationIndex: number;
+  winRate: number;
+  lift: number;
+  launchCount: number;
+  newItemDollarShare: number;
+  existingItemDollarShare: number;
+}
+
 export interface CohortRow {
   cohortMonth: string;
   category: Category;
