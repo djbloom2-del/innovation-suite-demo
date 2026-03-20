@@ -33,7 +33,6 @@ import {
   ZAxis,
 } from "recharts";
 import { Zap, ListFilter, ShieldCheck, BarChart2, SlidersHorizontal } from "lucide-react";
-import { AttributeSocialPanel } from "@/components/social/AttributeSocialPanel";
 import { AttributeIntelligenceSection } from "@/components/winner-dna/AttributeIntelligenceSection";
 
 const ATTR_COLORS = [
@@ -951,10 +950,6 @@ export default function WinnerDNA() {
             </div>
           </div>
 
-          {/* Social Signals */}
-          <div className="bg-white rounded-xl border border-slate-200 p-5">
-            <AttributeSocialPanel attrs={ATTR_KEYS} />
-          </div>
         </>
       )}
 
@@ -1444,12 +1439,6 @@ export default function WinnerDNA() {
             </div>
           </div>
 
-          {/* Social Signals */}
-          <div className="bg-white rounded-xl border border-slate-200 p-5">
-            <AttributeSocialPanel
-              attrs={trendsShowAttrs.length > 0 ? trendsShowAttrs : ATTR_KEYS}
-            />
-          </div>
         </div>
       )}
 

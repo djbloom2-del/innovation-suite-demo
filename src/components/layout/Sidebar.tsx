@@ -9,7 +9,6 @@ import {
   TrendingUp,
   Activity,
   FlaskConical,
-  SearchCode,
   BookOpen,
   Zap,
 } from "lucide-react";
@@ -22,7 +21,6 @@ const NAV = [
   { href: "/brands", icon: TrendingUp, label: "Brand Growth" },
   { href: "/trends", icon: Activity, label: "Trend Evolution" },
   { href: "/whitespace", icon: FlaskConical, label: "Whitespace Lab" },
-  { href: "/analogs", icon: SearchCode, label: "Analog Finder" },
   { href: "/story-builder", icon: BookOpen, label: "Story Builder" },
 ];
 
