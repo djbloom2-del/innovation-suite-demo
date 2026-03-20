@@ -10,13 +10,12 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
-  ScatterChart,
-  Scatter,
-  ZAxis,
   CartesianGrid,
   LineChart,
   Line,
   Legend,
+  ReferenceLine,
+  Label,
 } from "recharts";
 import { fmt$, fmtPct, categoryColor, scoreHex } from "@/lib/utils";
 import { LAUNCHES, getWinners } from "@/data/launches";
@@ -68,14 +67,19 @@ export default function BrandGrowthEngine() {
     { name: "Current Year", invisible: 0,                                                    bar: brand.totalDollars,      type: "total"    },
   ];
 
-  // Brand scatter: launch count vs win rate
-  const scatterData = BRANDS.map((b) => ({
-    x: b.launchCount,
-    y: Math.round(b.winRate * 100),
-    z: b.totalDollars / 1_000_000,
-    name: b.name,
-    isSelected: b.name === selectedBrand,
-  }));
+  // New Item Contribution: sorted by pctGrowthFromNewItems desc, expressed as percent
+  const newItemContribData = useMemo(
+    () =>
+      [...BRANDS]
+        .sort((a, b) => b.pctGrowthFromNewItems - a.pctGrowthFromNewItems)
+        .map((b) => ({
+          name: b.name,
+          share: parseFloat((b.pctGrowthFromNewItems * 100).toFixed(1)),
+          totalDollars: b.totalDollars,
+          isSelected: b.name === selectedBrand,
+        })),
+    [selectedBrand]
+  );
 
   const scoreCards = [
     { icon: TrendingUp, label: "Total $ Growth", value: fmtPct(growthPct, 1), color: growthPct > 0 ? "text-green-600" : "text-red-500", bg: "bg-green-50" },
@@ -87,7 +91,42 @@ export default function BrandGrowthEngine() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-5">
-      {/* Brand selector */}
+      {/* Brand Innovation Leaderboard — hero, full-width */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5">
+        <h2 className="text-sm font-semibold text-slate-700 mb-1">Brand Innovation Leaderboard</h2>
+        <p className="text-xs text-slate-400 mb-4">Click a brand to explore its innovation portfolio</p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-slate-100">
+                {["Brand", "Company", "Total $", "New Item $", "New Item Share", "Launches", "Win Rate", "$/Launch"].map((h) => (
+                  <th key={h} className="text-left pb-2 text-slate-400 font-medium pr-4 whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {topBrands.map((b) => (
+                <tr
+                  key={b.name}
+                  className={`border-b border-slate-50 cursor-pointer hover:bg-slate-50 ${b.name === selectedBrand ? "bg-blue-50" : ""}`}
+                  onClick={() => setSelectedBrand(b.name)}
+                >
+                  <td className="py-2 font-medium text-slate-700 pr-4">{b.name}</td>
+                  <td className="py-2 text-slate-400 pr-4">{b.company}</td>
+                  <td className="py-2 pr-4">{fmt$(b.totalDollars)}</td>
+                  <td className="py-2 text-blue-600 font-medium pr-4">{fmt$(b.newItemDollars)}</td>
+                  <td className="py-2 text-green-600 font-medium pr-4">{Math.round(b.pctGrowthFromNewItems * 100)}%</td>
+                  <td className="py-2 pr-4">{b.launchCount}</td>
+                  <td className="py-2 pr-4">{Math.round(b.winRate * 100)}%</td>
+                  <td className="py-2">{fmt$(b.innovationScore)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Brand selector — secondary nav */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-3 flex-wrap">
         <span className="text-xs text-slate-500 font-medium shrink-0">Brand:</span>
         <select
@@ -156,36 +195,81 @@ export default function BrandGrowthEngine() {
           </div>
         </div>
 
-        {/* Launch count vs win rate scatter */}
+        {/* New Item Contribution horizontal bar chart */}
         <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <h2 className="text-sm font-semibold text-slate-700 mb-1">Innovation Efficiency</h2>
+          <h2 className="text-sm font-semibold text-slate-700 mb-1">New Item Contribution</h2>
           <p className="text-xs text-slate-400 mb-4">
-            Launch volume vs win rate. Bubble = brand size. Selected brand highlighted.
+            New item $ as % of total brand dollars — healthy range is 15–40%
           </p>
-          <ResponsiveContainer width="100%" height={220}>
-            <ScatterChart margin={{ top: 8, right: 16, bottom: 16, left: -8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="x" name="Launches" type="number" allowDecimals={false} tick={{ fontSize: 10 }} label={{ value: "# Launches", position: "insideBottom", offset: -4, fontSize: 10 }} />
-              <YAxis dataKey="y" name="Win Rate" tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}%`} label={{ value: "Win Rate", angle: -90, position: "insideLeft", offset: 12, fontSize: 10 }} />
-              <ZAxis dataKey="z" range={[30, 300]} />
+          <ResponsiveContainer width="100%" height={400}>
+            <BarChart
+              layout="vertical"
+              data={newItemContribData}
+              margin={{ top: 8, right: 24, bottom: 0, left: 0 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+              <XAxis
+                type="number"
+                domain={[0, 100]}
+                tick={{ fontSize: 10 }}
+                tickFormatter={(v) => `${v}%`}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                type="category"
+                dataKey="name"
+                width={120}
+                tick={{ fontSize: 10 }}
+                axisLine={false}
+                tickLine={false}
+              />
               <Tooltip
-                content={({ payload }) => {
+                formatter={(v: any, name: any) => [`${Number(v).toFixed(1)}% of new items`, "New Item Share"]}
+                content={({ payload, label }) => {
                   if (!payload?.length) return null;
                   const d = payload[0].payload;
                   return (
                     <div className="bg-white border border-slate-200 rounded-lg p-2 text-xs shadow-md">
-                      <div className="font-semibold">{d.name}</div>
-                      <div>{d.x} launches · {d.y}% win rate</div>
+                      <div className="font-semibold mb-1">{d.name}</div>
+                      <div>{d.share.toFixed(1)}% of new items</div>
+                      <div className="text-slate-400">{fmt$(d.totalDollars)} total</div>
                     </div>
                   );
                 }}
               />
-              <Scatter
-                data={scatterData}
-                fill="#2563eb"
-                fillOpacity={0.6}
-              />
-            </ScatterChart>
+              <ReferenceLine
+                x={15}
+                stroke="#64748b"
+                strokeDasharray="4 3"
+              >
+                <Label value="Healthy Min" position="top" style={{ fontSize: 9, fill: "#64748b" }} />
+              </ReferenceLine>
+              <ReferenceLine
+                x={40}
+                stroke="#64748b"
+                strokeDasharray="4 3"
+              >
+                <Label value="Healthy Max" position="top" style={{ fontSize: 9, fill: "#64748b" }} />
+              </ReferenceLine>
+              <Bar dataKey="share" radius={[0, 4, 4, 0]}>
+                {newItemContribData.map((d, idx) => {
+                  const share = d.share;
+                  const fill =
+                    share > 40 ? "#f59e0b" :
+                    share >= 15 ? "#16a34a" :
+                    "#94a3b8";
+                  return (
+                    <Cell
+                      key={idx}
+                      fill={fill}
+                      stroke={d.isSelected ? "#2563eb" : "transparent"}
+                      strokeWidth={d.isSelected ? 2 : 0}
+                    />
+                  );
+                })}
+              </Bar>
+            </BarChart>
           </ResponsiveContainer>
         </div>
       </div>
@@ -259,40 +343,6 @@ export default function BrandGrowthEngine() {
           )}
         </div>
       )}
-
-      {/* Top brands table */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5">
-        <h2 className="text-sm font-semibold text-slate-700 mb-4">Brand Innovation Leaderboard</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-slate-100">
-                {["Brand", "Company", "Total $", "New Item $", "New Item Share", "Launches", "Win Rate", "$/Launch"].map((h) => (
-                  <th key={h} className="text-left pb-2 text-slate-400 font-medium pr-4 whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {topBrands.map((b) => (
-                <tr
-                  key={b.name}
-                  className={`border-b border-slate-50 cursor-pointer hover:bg-slate-50 ${b.name === selectedBrand ? "bg-blue-50" : ""}`}
-                  onClick={() => setSelectedBrand(b.name)}
-                >
-                  <td className="py-2 font-medium text-slate-700 pr-4">{b.name}</td>
-                  <td className="py-2 text-slate-400 pr-4">{b.company}</td>
-                  <td className="py-2 pr-4">{fmt$(b.totalDollars)}</td>
-                  <td className="py-2 text-blue-600 font-medium pr-4">{fmt$(b.newItemDollars)}</td>
-                  <td className="py-2 text-green-600 font-medium pr-4">{Math.round(b.pctGrowthFromNewItems * 100)}%</td>
-                  <td className="py-2 pr-4">{b.launchCount}</td>
-                  <td className="py-2 pr-4">{Math.round(b.winRate * 100)}%</td>
-                  <td className="py-2">{fmt$(b.innovationScore)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
     </div>
   );
 }
