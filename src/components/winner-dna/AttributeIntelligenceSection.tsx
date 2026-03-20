@@ -12,6 +12,17 @@ import {
 } from "@/data/attributes";
 import { fmtPct } from "@/lib/utils";
 import { Search, X } from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  Cell,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  ReferenceLine,
+  LabelList,
+} from "recharts";
 
 // All available attributes (expandable when SPINS data arrives)
 const ALL_ATTRS: string[] = [...ATTR_KEYS];
@@ -30,6 +41,57 @@ function idxBg(idx: number): string {
   if (idx >= 70)  return "bg-amber-50 border-amber-200 text-amber-700";
   return "bg-red-50 border-red-200 text-red-700";
 }
+
+// ─── Waterfall ────────────────────────────────────────────────────────────────
+interface WaterfallPoint {
+  name:     string;
+  base:     number;   // transparent spacer
+  value:    number;   // visible bar
+  rawDelta: number;   // signed delta for labels/tooltip
+  type:     "baseline" | "positive" | "negative" | "total";
+}
+
+function buildWaterfallData(
+  baselineWinRate: number,
+  singles: AttributeIntelRecord[],
+  comboWinRate: number,
+): WaterfallPoint[] {
+  const pct = (v: number) => Math.round(v * 1000) / 10; // fraction → 0.0–100.0
+
+  const sorted = [...singles].sort(
+    (a, b) => Math.abs(b.marginalContribution) - Math.abs(a.marginalContribution),
+  );
+
+  const data: WaterfallPoint[] = [];
+  let running = pct(baselineWinRate);
+
+  // Baseline bar — full height from 0
+  data.push({ name: "Baseline", base: 0, value: running, rawDelta: running, type: "baseline" });
+
+  for (const s of sorted) {
+    const delta = pct(s.marginalContribution);
+    if (delta >= 0) {
+      data.push({ name: s.attr, base: running, value: delta, rawDelta: delta, type: "positive" });
+      running += delta;
+    } else {
+      // Negative bar: spacer up to the new (lower) total; visible bar fills from there upward
+      data.push({ name: s.attr, base: running + delta, value: Math.abs(delta), rawDelta: delta, type: "negative" });
+      running += delta;
+    }
+  }
+
+  // Combination total — full height from 0
+  data.push({ name: "Combination", base: 0, value: pct(comboWinRate), rawDelta: pct(comboWinRate), type: "total" });
+
+  return data;
+}
+
+const WATERFALL_FILL: Record<WaterfallPoint["type"], string> = {
+  baseline: "#94a3b8",
+  positive: "#16a34a",
+  negative: "#dc2626",
+  total:    "#2563eb",
+};
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export function AttributeIntelligenceSection() {
@@ -95,6 +157,11 @@ export function AttributeIntelligenceSection() {
       (a) => !pinnedAttrs.includes(a) && (q === "" || a.toLowerCase().includes(q)),
     );
   }, [searchQuery, pinnedAttrs]);
+
+  const waterfallData = useMemo(() => {
+    if (pinnedAttrs.length < 2) return null;
+    return buildWaterfallData(baselineWinRate, singles, comboWinRate);
+  }, [baselineWinRate, singles, comboWinRate, pinnedAttrs.length]);
 
   // ── Handlers ───────────────────────────────────────────────────────────────
   const pinAttr   = (attr: string) => { setPinnedAttrs((p) => [...p, attr]); setSearchQuery(""); };
@@ -233,9 +300,99 @@ export function AttributeIntelligenceSection() {
         </div>
       </div>
 
-      {/* ── Waterfall + Table (Task 4 + 5 placeholders) ── */}
-      <div className="border border-dashed border-slate-200 rounded-xl p-6 text-center text-xs text-slate-400">
-        Waterfall chart — Task 4
+      {/* ── Waterfall ── */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5">
+        <h3 className="text-xs font-semibold text-slate-700 mb-0.5">
+          Marginal Contribution Waterfall
+        </h3>
+        <p className="text-[10px] text-slate-400 mb-4">
+          How much each attribute adds or subtracts from the combination win rate.
+          Sorted by absolute impact.
+        </p>
+
+        {pinnedAttrs.length < 2 ? (
+          <div className="py-10 text-center text-xs text-slate-400">
+            Pin 2 or more attributes to see the waterfall.
+          </div>
+        ) : !waterfallData ? null : (
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={waterfallData} margin={{ top: 24, right: 16, bottom: 8, left: 8 }}>
+              <XAxis
+                dataKey="name"
+                tick={{ fontSize: 10, fill: "#475569" }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                domain={[0, 100]}
+                tickFormatter={(v) => `${v}%`}
+                tick={{ fontSize: 9, fill: "#94a3b8" }}
+                axisLine={false}
+                tickLine={false}
+                width={32}
+              />
+              <ReferenceLine
+                y={Math.round(baselineWinRate * 100)}
+                stroke="#94a3b8"
+                strokeDasharray="4 2"
+                strokeWidth={1}
+              />
+              <Tooltip
+                content={({ payload }) => {
+                  if (!payload?.length) return null;
+                  const d = payload[0]?.payload as WaterfallPoint;
+                  if (!d) return null;
+                  return (
+                    <div className="bg-white border border-slate-200 rounded-lg p-2.5 text-xs shadow-md">
+                      <div className="font-semibold text-slate-800 mb-1">{d.name}</div>
+                      {d.type === "baseline" && (
+                        <div className="text-slate-500">Category baseline: {d.value.toFixed(1)}%</div>
+                      )}
+                      {d.type === "total" && (
+                        <div className="text-slate-500">Full combo win rate: {d.value.toFixed(1)}%</div>
+                      )}
+                      {(d.type === "positive" || d.type === "negative") && (
+                        <div className={d.rawDelta >= 0 ? "text-green-600" : "text-red-500"}>
+                          Marginal contribution: {d.rawDelta >= 0 ? "+" : ""}{d.rawDelta.toFixed(1)}pp
+                        </div>
+                      )}
+                    </div>
+                  );
+                }}
+              />
+              {/* Transparent spacer — must be first in stack */}
+              <Bar dataKey="base" stackId="w" fill="transparent" isAnimationActive={false} />
+              {/* Visible coloured bar */}
+              <Bar dataKey="value" stackId="w" isAnimationActive={false} radius={[3, 3, 0, 0]}>
+                {waterfallData.map((entry, i) => (
+                  <Cell key={i} fill={WATERFALL_FILL[entry.type]} />
+                ))}
+                <LabelList
+                  dataKey="rawDelta"
+                  position="top"
+                  fontSize={9}
+                  fill="#475569"
+                  formatter={(v: any) => {
+                    if (typeof v !== "number") return "";
+                    return v > 0 && v < 100 ? `+${v.toFixed(1)}pp` : v < 0 ? `${v.toFixed(1)}pp` : `${v.toFixed(1)}%`;
+                  }}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+
+        {/* Legend */}
+        {pinnedAttrs.length >= 2 && (
+          <div className="flex flex-wrap gap-3 mt-2 justify-center">
+            {(["baseline", "positive", "negative", "total"] as const).map((type) => (
+              <div key={type} className="flex items-center gap-1 text-[10px] text-slate-500">
+                <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: WATERFALL_FILL[type] }} />
+                {type === "baseline" ? "Baseline" : type === "positive" ? "Adds lift" : type === "negative" ? "Reduces win rate" : "Full combination"}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
       <div className="border border-dashed border-slate-200 rounded-xl p-6 text-center text-xs text-slate-400">
         Ranked combo table — Task 5
