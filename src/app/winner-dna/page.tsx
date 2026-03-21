@@ -181,7 +181,7 @@ export default function WinnerDNA() {
     const catWinners  = getWinners(catLaunches);
     const catBaseline = catLaunches.length ? catWinners.length / catLaunches.length : 0;
 
-    const rows: { label: string; count: number; winRate: number; lift: number; attrCount: number }[] = [];
+    const rows: { label: string; count: number; winRate: number; lift: number; baseline: number; attrCount: number }[] = [];
 
     // 2-attribute pairs
     for (let i = 0; i < ATTR_KEYS.length; i++) {
@@ -190,8 +190,8 @@ export default function WinnerDNA() {
         const b = ATTR_KEYS[j];
         const withBoth = catLaunches.filter(l => matchesAttr(l, a) && matchesAttr(l, b));
         const winRate  = withBoth.length ? getWinners(withBoth).length / withBoth.length : 0;
-        const lift     = catBaseline > 0 ? winRate / catBaseline : 1;
-        rows.push({ label: `${a} + ${b}`, count: withBoth.length, winRate, lift, attrCount: 2 });
+        const lift     = +(catBaseline > 0 ? winRate / catBaseline : 1).toFixed(2);
+        rows.push({ label: `${a} + ${b}`, count: withBoth.length, winRate, lift, baseline: catBaseline, attrCount: 2 });
       }
     }
 
@@ -199,9 +199,9 @@ export default function WinnerDNA() {
     for (let i = 0; i < ATTR_KEYS.length - 2; i++) {
       for (let j = i + 1; j < ATTR_KEYS.length - 1; j++) {
         for (let k = j + 1; k < ATTR_KEYS.length; k++) {
-          const a1 = ATTR_KEYS[i] as string, a2 = ATTR_KEYS[j] as string, a3 = ATTR_KEYS[k] as string;
+          const a1 = ATTR_KEYS[i], a2 = ATTR_KEYS[j], a3 = ATTR_KEYS[k];
           const matching = catLaunches.filter(
-            (l) => matchesAttr(l, a1 as any) && matchesAttr(l, a2 as any) && matchesAttr(l, a3 as any)
+            (l) => matchesAttr(l, a1) && matchesAttr(l, a2) && matchesAttr(l, a3)
           );
           if (matching.length < 2) continue;
           const winners = matching.filter((l) => l.launchQualityScore >= 70);
@@ -211,6 +211,7 @@ export default function WinnerDNA() {
             count: matching.length,
             winRate: wr,
             lift: +(wr / catBaseline).toFixed(2),
+            baseline: catBaseline,
             attrCount: 3,
           });
         }
@@ -634,7 +635,7 @@ export default function WinnerDNA() {
               <tbody>
                 {comboTableData.map((row, i) => {
                   const liftColor = row.lift >= 2 ? "text-green-600 font-semibold" : row.lift >= 1.3 ? "text-amber-600" : "text-slate-500";
-                  const diffPct   = Math.round((row.winRate - (comboTableData[0]?.lift > 0 ? comboTableData[0].winRate / comboTableData[0].lift : 0)) * 100);
+                  const diffPct   = Math.round((row.winRate - (comboTableData[0]?.baseline ?? 0)) * 100);
                   return (
                     <tr key={i} className="border-b border-slate-50 hover:bg-slate-50">
                       <td className="py-2 text-slate-700 font-medium">
