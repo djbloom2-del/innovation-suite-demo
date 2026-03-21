@@ -23,6 +23,20 @@ const SORT_OPTIONS = [
   { value: "distribution", label: "Distribution" },
 ] as const;
 
+const LIFECYCLE_DISPLAY = [
+  { label: "New (< 2yr)", outcomes: ["Early Stage", "Year 1"] as LaunchOutcome[], hex: "#64748b" },
+  { label: "Successful",  outcomes: ["Successful"] as LaunchOutcome[],  hex: "#0d9488" },
+  { label: "Fading",      outcomes: ["Fading"] as LaunchOutcome[],      hex: "#ea580c" },
+  { label: "Sustaining",  outcomes: ["Sustaining"] as LaunchOutcome[],  hex: "#059669" },
+  { label: "Declining",   outcomes: ["Declining"] as LaunchOutcome[],   hex: "#e11d48" },
+] as const;
+
+const ATTR_GROUPS = [
+  { group: "Health Claims",    attrs: ["Organic", "Non-GMO"] as const },
+  { group: "Diet & Lifestyle", attrs: ["Vegan", "Gluten-Free", "Keto"] as const },
+  { group: "Nutrition",        attrs: ["Protein"] as const },
+] as const;
+
 function toggle<T>(arr: T[], v: T): T[] {
   return arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v];
 }
@@ -61,9 +75,11 @@ function InnovationChip({
   onClick: () => void;
 }) {
   const meta = INNOVATION_TYPE_META[type];
+  const label = type === "New to World" ? "New to World" : meta.shortLabel;
   return (
     <button
       onClick={onClick}
+      title={meta.description}
       className={cn(
         "px-2.5 py-1 rounded-full border text-xs font-medium transition-colors",
         active
@@ -71,7 +87,7 @@ function InnovationChip({
           : `bg-white ${meta.textClass} ${meta.borderClass} hover:bg-slate-50`
       )}
     >
-      {meta.shortLabel}
+      {label}
     </button>
   );
 }
@@ -209,16 +225,21 @@ export function LaunchFilterPanel({ filters, onChange, total }: Props) {
       {/* Attributes */}
       <div>
         <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Attributes</div>
-        <div className="flex flex-wrap gap-1.5">
-          {ATTR_FLAGS.map((a) => (
-            <Chip
-              key={a}
-              label={a}
-              active={filters.attributes.includes(a)}
-              onClick={() => set({ attributes: toggle(filters.attributes, a) })}
-            />
-          ))}
-        </div>
+        {ATTR_GROUPS.map((g) => (
+          <div key={g.group} className="mb-2 last:mb-0">
+            <div className="text-[9px] font-semibold text-slate-300 uppercase tracking-wide mb-1">{g.group}</div>
+            <div className="flex flex-wrap gap-1.5">
+              {g.attrs.map((attr) => (
+                <Chip
+                  key={attr}
+                  label={attr}
+                  active={filters.attributes.includes(attr)}
+                  onClick={() => set({ attributes: toggle(filters.attributes, attr) })}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Innovation Type */}
@@ -240,14 +261,31 @@ export function LaunchFilterPanel({ filters, onChange, total }: Props) {
       <div>
         <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Lifecycle Outcome</div>
         <div className="flex flex-wrap gap-1.5">
-          {LAUNCH_OUTCOMES.map((o) => (
-            <OutcomeChip
-              key={o}
-              outcome={o}
-              active={filters.launchOutcomes.includes(o)}
-              onClick={() => set({ launchOutcomes: toggle(filters.launchOutcomes, o) })}
-            />
-          ))}
+          {LIFECYCLE_DISPLAY.map((d) => {
+            const active = d.outcomes.every((o) => filters.launchOutcomes.includes(o));
+            return (
+              <button
+                key={d.label}
+                onClick={() => {
+                  let updated = filters.launchOutcomes;
+                  if (active) {
+                    updated = updated.filter((o) => !(d.outcomes as readonly LaunchOutcome[]).includes(o));
+                  } else {
+                    const toAdd = d.outcomes.filter((o) => !updated.includes(o));
+                    updated = [...updated, ...toAdd];
+                  }
+                  set({ launchOutcomes: updated });
+                }}
+                style={active ? { backgroundColor: d.hex, color: "white", borderColor: "transparent" } : {}}
+                className={cn(
+                  "px-2.5 py-1 rounded-full text-xs font-medium transition-colors border",
+                  active ? "text-white border-transparent" : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
+                )}
+              >
+                {d.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
