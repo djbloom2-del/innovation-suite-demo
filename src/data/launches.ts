@@ -2,8 +2,9 @@ import type { Launch, AttributeSet, Retailer, InnovationType, LaunchOutcome, Vel
 import { classifyInnovationType } from "@/lib/innovation";
 import { computeQualityScore } from "@/lib/utils";
 import { getBenchmark } from "@/data/categories";
+import { computeNeedState, launchToNeedStateInput } from "@/data/needStates";
 
-type RawLaunch = Omit<Launch, "innovationType" | "velocityTier">;
+type RawLaunch = Omit<Launch, "innovationType" | "velocityTier" | "needState" | "needStateSecondary">;
 
 // Snapshot date used for all relative-date calculations (launch age, cohort months, etc.)
 export const DATA_SNAPSHOT_DATE = "2026-03-08";
@@ -372,6 +373,7 @@ const WITH_INNOVATION: (RawLaunch & { innovationType: InnovationType })[] = RAW_
 }));
 
 // Post-process 2: velocityTier — top/mid/bottom third of category velocity
+// Post-process 3: needState / needStateSecondary — classification engine
 export const LAUNCHES: Launch[] = WITH_INNOVATION.map((l) => {
   const catVelocities = WITH_INNOVATION
     .filter((other) => other.category === l.category)
@@ -383,7 +385,8 @@ export const LAUNCHES: Launch[] = WITH_INNOVATION.map((l) => {
     rank >= Math.floor(n * 2 / 3) ? "Top" :
     rank >= Math.floor(n / 3)     ? "Mid" :
     "Bottom";
-  return { ...l, velocityTier: tier };
+  const { primary, secondary } = computeNeedState(launchToNeedStateInput(l as Launch));
+  return { ...l, velocityTier: tier, needState: primary, needStateSecondary: secondary };
 });
 
 export function getLaunchByUpc(upc: string): Launch | undefined {

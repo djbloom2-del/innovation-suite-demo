@@ -323,6 +323,7 @@ export function LaunchFilterPanel({ filters, onChange, total }: Props) {
               launchOutcomes: [],
               velocityTiers: [],
               channels: [],
+              needStates: [],
               sortBy: "qualityScore",
               searchQuery: "",
             })

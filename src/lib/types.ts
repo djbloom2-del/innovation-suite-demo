@@ -1,5 +1,18 @@
 export type Category = "Bars" | "Beverages" | "Snacks" | "Supplements" | "Frozen Meals";
 
+export type NeedState =
+  | "Energy Support"
+  | "Recovery"
+  | "Cognitive Health & Focus"
+  | "Mood Support"
+  | "Immunity"
+  | "Sleep"
+  | "Digestive Health"
+  | "Hydration"
+  | "Beauty & Skin Health"
+  | "Cleanse / Detox"
+  | "Broad Wellness";
+
 export type PatternType = "winner" | "steady" | "fader" | "sleeper";
 
 export type PackFormat = "Single" | "Multipack" | "Family" | "Trial" | "Variety Pack";
@@ -86,6 +99,8 @@ export interface Launch {
   launchQualityScore: number; // 0–100
   innovationType: InnovationType;
   channel: RetailChannel;
+  needState: NeedState;
+  needStateSecondary: NeedState | null;
   // Year-over-year lifecycle
   dollarsY1: number | null;
   dollarsY2: number | null;
@@ -226,6 +241,7 @@ export interface LaunchFilters {
   launchOutcomes: LaunchOutcome[];
   velocityTiers: VelocityTier[];
   channels: RetailChannel[];
+  needStates: NeedState[];
   sortBy: "qualityScore" | "growth" | "velocity" | "distribution";
   searchQuery: string;
 }

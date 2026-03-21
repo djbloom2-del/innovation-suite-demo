@@ -96,6 +96,7 @@ export const DEFAULT_FILTERS: LaunchFilters = {
   launchOutcomes: [],
   velocityTiers: [],
   channels: [],
+  needStates: [],
   sortBy: "qualityScore",
   searchQuery: "",
 };
