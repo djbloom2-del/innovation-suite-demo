@@ -25,7 +25,7 @@ import { Trophy, Rocket, TrendingUp, Zap, AlertTriangle } from "lucide-react";
 export default function BrandGrowthEngine() {
   const [selectedBrand, setSelectedBrand] = useState(BRANDS[0].name);
   const brand = useMemo(() => BRANDS.find((b) => b.name === selectedBrand)!, [selectedBrand]);
-  const topBrands = getTopBrandsByGrowth(12);
+  const topBrands = getTopBrandsByGrowth(20);
 
   const growthPct = (brand.totalDollars - brand.totalDollarsPrior) / (brand.totalDollarsPrior || 1);
   const coreGrowth = brand.totalDollars - brand.totalDollarsPrior - brand.newItemDollars;
@@ -225,14 +225,13 @@ export default function BrandGrowthEngine() {
                 tickLine={false}
               />
               <Tooltip
-                formatter={(v: any, name: any) => [`${Number(v).toFixed(1)}% of new items`, "New Item Share"]}
                 content={({ payload, label }) => {
                   if (!payload?.length) return null;
                   const d = payload[0].payload;
                   return (
                     <div className="bg-white border border-slate-200 rounded-lg p-2 text-xs shadow-md">
                       <div className="font-semibold mb-1">{d.name}</div>
-                      <div>{d.share.toFixed(1)}% of new items</div>
+                      <div>{d.share.toFixed(1)}% of brand $ from new items</div>
                       <div className="text-slate-400">{fmt$(d.totalDollars)} total</div>
                     </div>
                   );
