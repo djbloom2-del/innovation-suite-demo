@@ -4,7 +4,7 @@ import { CATEGORIES } from "@/data/categories";
 import { BRANDS } from "@/data/brands";
 import type { LaunchFilters, InnovationType, LaunchOutcome, VelocityTier } from "@/lib/types";
 import { INNOVATION_TYPE_META, INNOVATION_TYPES } from "@/lib/innovation";
-import { cn, OUTCOME_META, LAUNCH_OUTCOMES, VELOCITY_TIER_META } from "@/lib/utils";
+import { cn, VELOCITY_TIER_META } from "@/lib/utils";
 import { Search, SlidersHorizontal } from "lucide-react";
 
 interface Props {
@@ -15,7 +15,6 @@ interface Props {
 
 const AGE_BANDS = ["0–12w", "13–26w", "27–52w", "52w+"];
 const PRICE_TIERS = ["< $3", "$3–$6", "$6–$10", "$10+"];
-const ATTR_FLAGS = ["Organic", "Non-GMO", "Gluten-Free", "Vegan", "Keto", "Protein"];
 const SORT_OPTIONS = [
   { value: "qualityScore", label: "Quality Score" },
   { value: "growth", label: "Growth" },
@@ -88,30 +87,6 @@ function InnovationChip({
       )}
     >
       {label}
-    </button>
-  );
-}
-
-function OutcomeChip({
-  outcome,
-  active,
-  onClick,
-}: {
-  outcome: LaunchOutcome;
-  active: boolean;
-  onClick: () => void;
-}) {
-  const meta = OUTCOME_META[outcome];
-  return (
-    <button
-      onClick={onClick}
-      style={active ? { backgroundColor: meta.hex, color: "white", borderColor: "transparent" } : {}}
-      className={cn(
-        "px-2.5 py-1 rounded-full text-xs font-medium transition-colors border",
-        active ? "text-white border-transparent" : meta.bgClass
-      )}
-    >
-      {meta.label}
     </button>
   );
 }
