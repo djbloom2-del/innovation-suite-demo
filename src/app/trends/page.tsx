@@ -80,10 +80,6 @@ const MonthlyTooltip = ({ active, payload, label }: any) => {
 
 // ── Helper ───────────────────────────────────────────────────────────────────
 
-function fmtMonthShort(dateStr: string): string {
-  return fmtMonth(dateStr);
-}
-
 function cellBg(count: number): string {
   if (count === 0) return "bg-slate-50 text-slate-300";
   if (count <= 2) return "bg-blue-100 text-blue-700";
@@ -102,8 +98,7 @@ const INNO_TYPES: CoreInnoType[] = [
   "Pack Size Variant",
 ];
 
-const INNO_TYPE_SHORT: Record<string, string> = {
-  "New to World": "New to World",
+const INNO_TYPE_SHORT: Partial<Record<CoreInnoType, string>> = {
   "Flavor Extension": "Flavor Ext.",
   "Format Extension": "Format Ext.",
   "Category Extension": "Category Ext.",
@@ -136,7 +131,7 @@ export default function TrendEvolution() {
   const nsTrends = useMemo(() => getNeedStateTrends(filteredLaunches), [filteredLaunches]);
   const top6 = useMemo(() => nsPerf.slice(0, 6).map((r) => r.needState), [nsPerf]);
   const nsTrendsDisplay = useMemo(
-    () => nsTrends.map((row) => ({ ...row, month: fmtMonthShort(row.month) })),
+    () => nsTrends.map((row) => ({ ...row, month: fmtMonth(row.month) })),
     [nsTrends]
   );
 
@@ -163,9 +158,9 @@ export default function TrendEvolution() {
 
   // Supplemental — Monthly Launch Volume
   const monthlyCounts = useMemo(() => {
-    const raw = getMonthlyLaunchCounts();
+    const raw = getMonthlyLaunchCounts(filteredLaunches);
     return raw.map((d) => ({ ...d, month: fmtMonth(d.month) }));
-  }, []);
+  }, [filteredLaunches]);
 
   return (
     <div className="p-6 space-y-8 max-w-7xl mx-auto">
@@ -282,7 +277,7 @@ export default function TrendEvolution() {
                   tick={{ fontSize: 10 }}
                   axisLine={false}
                   tickLine={false}
-                  tickFormatter={(v: string) => INNO_TYPE_SHORT[v] ?? v}
+                  tickFormatter={(v: any) => INNO_TYPE_SHORT[v as CoreInnoType] ?? v}
                 />
                 <Tooltip content={<InnoWinTooltip />} />
                 <Bar dataKey="winRate" radius={[0, 4, 4, 0]} name="Win Rate">
@@ -316,7 +311,7 @@ export default function TrendEvolution() {
                   tick={{ fontSize: 9 }}
                   axisLine={false}
                   tickLine={false}
-                  tickFormatter={(v: string) => INNO_TYPE_SHORT[v] ?? v}
+                  tickFormatter={(v: any) => INNO_TYPE_SHORT[v as CoreInnoType] ?? v}
                   angle={-25}
                   textAnchor="end"
                 />
@@ -349,7 +344,7 @@ export default function TrendEvolution() {
                 <th className="text-left text-slate-500 font-medium pb-2 pr-3 w-44">Need State</th>
                 {INNO_TYPES.map((t) => (
                   <th key={t} className="text-center text-slate-500 font-medium pb-2 min-w-[80px] px-1">
-                    {INNO_TYPE_SHORT[t]}
+                    {INNO_TYPE_SHORT[t] ?? t}
                   </th>
                 ))}
               </tr>

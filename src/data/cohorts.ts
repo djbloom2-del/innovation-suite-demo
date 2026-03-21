@@ -1,4 +1,4 @@
-import type { CohortRow, Category } from "@/lib/types";
+import type { CohortRow, Category, Launch } from "@/lib/types";
 import { LAUNCHES } from "./launches";
 import { DATA_SNAPSHOT_DATE } from "@/lib/utils";
 
@@ -47,7 +47,8 @@ export function buildCohortRows(): CohortRow[] {
 export const COHORT_ROWS: CohortRow[] = buildCohortRows();
 
 // Monthly launch counts for trend chart (last 18 months)
-export function getMonthlyLaunchCounts(): { month: string; count: number }[] {
+export function getMonthlyLaunchCounts(launches?: Launch[]): { month: string; count: number }[] {
+  const source = launches ?? LAUNCHES;
   const now = new Date(DATA_SNAPSHOT_DATE);
   const counts = new Map<string, number>();
 
@@ -58,7 +59,7 @@ export function getMonthlyLaunchCounts(): { month: string; count: number }[] {
     counts.set(key, 0);
   }
 
-  LAUNCHES.forEach((l) => {
+  source.forEach((l) => {
     const key = l.launchCohortMonth;
     if (counts.has(key)) counts.set(key, (counts.get(key) ?? 0) + 1);
   });
