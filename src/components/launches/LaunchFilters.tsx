@@ -178,7 +178,7 @@ export function LaunchFilterPanel({ filters, onChange, total }: Props) {
               className={cn(
                 "px-2.5 py-1 rounded-full text-xs font-medium transition-colors border",
                 filters.channels.includes(ch)
-                  ? "bg-slate-700 text-white border-transparent"
+                  ? "bg-blue-600 text-white border-blue-600"
                   : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
               )}
             >

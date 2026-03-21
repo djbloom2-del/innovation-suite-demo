@@ -227,8 +227,10 @@ export function computeQualityScoreBreakdown(
   },
   bench: CategoryBenchmark
 ): QualityScoreBreakdown {
-  const velocityScore   = Math.min(params.velocityLatest / (bench.medianVelocity26w * CHANNEL_VELOCITY_MULT[params.channel]) / 2, 1) * 100;
-  const distributionScore = Math.min(params.tdpLatest / (bench.medianTdp12w * CHANNEL_TDP_MULT[params.channel]) / 2, 1) * 100;
+  const adjVelocityBench = bench.medianVelocity26w * CHANNEL_VELOCITY_MULT[params.channel];
+  const adjTdpBench      = bench.medianTdp12w * CHANNEL_TDP_MULT[params.channel];
+  const velocityScore    = Math.min(params.velocityLatest / adjVelocityBench / 2, 1) * 100;
+  const distributionScore = Math.min(params.tdpLatest / adjTdpBench / 2, 1) * 100;
   const growthScore     = params.growthRate12w == null
     ? 50
     : Math.min(Math.max((params.growthRate12w - bench.growthRate + 0.20) / 0.40, 0), 1) * 100;
@@ -243,7 +245,7 @@ export function computeQualityScoreBreakdown(
     {
       label: "Velocity",
       value: `$${params.velocityLatest.toFixed(1)}/store`,
-      benchmark: `median $${bench.medianVelocity26w.toFixed(1)}`,
+      benchmark: `median $${adjVelocityBench.toFixed(1)} (${params.channel})`,
       score: Math.round(velocityScore),
       weight: 0.35,
       contribution: velocityScore * 0.35,
@@ -251,7 +253,7 @@ export function computeQualityScoreBreakdown(
     {
       label: "Distribution",
       value: `${Math.round(params.tdpLatest)} TDP`,
-      benchmark: `median ${bench.medianTdp12w} TDP`,
+      benchmark: `median ${Math.round(adjTdpBench)} TDP (${params.channel})`,
       score: Math.round(distributionScore),
       weight: 0.25,
       contribution: distributionScore * 0.25,
