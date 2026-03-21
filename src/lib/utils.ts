@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import type { Launch, LaunchOutcome, VelocityTier, CategoryBenchmark } from "@/lib/types";
+import type { Launch, LaunchOutcome, VelocityTier, CategoryBenchmark, RetailChannel } from "@/lib/types";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -184,6 +184,18 @@ export function getGrowthContribution(l: Launch, benchGrowthRate: number): numbe
 
 // ── Quality Score (category-anchored) ─────────────────────────────────────
 
+const CHANNEL_VELOCITY_MULT: Record<RetailChannel, number> = {
+  "Natural": 0.55,
+  "Both":    0.80,
+  "MULO":    1.00,
+};
+
+const CHANNEL_TDP_MULT: Record<RetailChannel, number> = {
+  "Natural": 0.25,
+  "Both":    0.60,
+  "MULO":    1.00,
+};
+
 export interface QualityScoreDimension {
   label: string;
   value: string;       // formatted display value (e.g. "$24.1/store")
@@ -211,11 +223,12 @@ export function computeQualityScoreBreakdown(
     survived12w: boolean;
     survived26w: boolean | null;
     survived52w: boolean | null;
+    channel: RetailChannel;
   },
   bench: CategoryBenchmark
 ): QualityScoreBreakdown {
-  const velocityScore   = Math.min(params.velocityLatest / bench.medianVelocity26w / 2, 1) * 100;
-  const distributionScore = Math.min(params.tdpLatest / bench.medianTdp12w / 2, 1) * 100;
+  const velocityScore   = Math.min(params.velocityLatest / (bench.medianVelocity26w * CHANNEL_VELOCITY_MULT[params.channel]) / 2, 1) * 100;
+  const distributionScore = Math.min(params.tdpLatest / (bench.medianTdp12w * CHANNEL_TDP_MULT[params.channel]) / 2, 1) * 100;
   const growthScore     = params.growthRate12w == null
     ? 50
     : Math.min(Math.max((params.growthRate12w - bench.growthRate + 0.20) / 0.40, 0), 1) * 100;

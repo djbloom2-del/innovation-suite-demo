@@ -1,4 +1,4 @@
-import type { Launch, AttributeSet, Retailer, InnovationType, LaunchOutcome, VelocityTier } from "@/lib/types";
+import type { Launch, AttributeSet, Retailer, InnovationType, LaunchOutcome, VelocityTier, RetailChannel } from "@/lib/types";
 import { classifyInnovationType } from "@/lib/innovation";
 import { computeQualityScore } from "@/lib/utils";
 import { getBenchmark } from "@/data/categories";
@@ -51,6 +51,15 @@ interface LaunchSpec {
   priceLatest: number;
   promoMix: number; // 0-1
   attributes: AttributeSet;
+}
+
+function assignChannel(category: Launch["category"], rand: number): RetailChannel {
+  if (category === "Supplements") return rand < 0.60 ? "Natural" : rand < 0.85 ? "Both" : "MULO";
+  if (category === "Beverages")   return rand < 0.35 ? "Natural" : rand < 0.65 ? "Both" : "MULO";
+  if (category === "Bars")        return rand < 0.30 ? "Natural" : rand < 0.65 ? "Both" : "MULO";
+  if (category === "Snacks")      return rand < 0.15 ? "Natural" : rand < 0.45 ? "Both" : "MULO";
+  // Frozen Meals
+  return rand < 0.10 ? "Natural" : rand < 0.35 ? "Both" : "MULO";
 }
 
 function classifyOutcome(
@@ -128,6 +137,10 @@ function buildLaunch(spec: LaunchSpec, peers: Launch[] = []): RawLaunch {
     Math.round((spec.patternType === "winner" ? 60 : 42) + r() * 30)
   );
 
+  // Channel — separate seed, computed before quality score so it can be passed in
+  const rChannel = rng(parseInt(spec.upc.slice(-4)) + 88771);
+  const channel = assignChannel(spec.category, rChannel());
+
   // Quality score — category-anchored ratios (see computeQualityScore in utils.ts)
   const baseMix = 1 - spec.promoMix;
   const bench = getBenchmark(spec.category);
@@ -140,6 +153,7 @@ function buildLaunch(spec: LaunchSpec, peers: Launch[] = []): RawLaunch {
       survived12w,
       survived26w,
       survived52w,
+      channel,
     },
     bench
   );
@@ -253,6 +267,7 @@ function buildLaunch(spec: LaunchSpec, peers: Launch[] = []): RawLaunch {
     growthY2toY3,
     launchOutcome,
     attributes: spec.attributes,
+    channel,
   };
 }
 

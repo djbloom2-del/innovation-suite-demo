@@ -2,7 +2,7 @@
 
 import { CATEGORIES } from "@/data/categories";
 import { BRANDS } from "@/data/brands";
-import type { LaunchFilters, InnovationType, LaunchOutcome, VelocityTier } from "@/lib/types";
+import type { LaunchFilters, InnovationType, LaunchOutcome, VelocityTier, RetailChannel } from "@/lib/types";
 import { INNOVATION_TYPE_META, INNOVATION_TYPES } from "@/lib/innovation";
 import { cn, VELOCITY_TIER_META } from "@/lib/utils";
 import { Search, SlidersHorizontal } from "lucide-react";
@@ -167,6 +167,27 @@ export function LaunchFilterPanel({ filters, onChange, total }: Props) {
         </div>
       </div>
 
+      {/* Retail Channel */}
+      <div>
+        <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Retail Channel</div>
+        <div className="flex gap-1.5">
+          {(["Natural", "MULO", "Both"] as RetailChannel[]).map((ch) => (
+            <button
+              key={ch}
+              onClick={() => set({ channels: toggle(filters.channels, ch) })}
+              className={cn(
+                "px-2.5 py-1 rounded-full text-xs font-medium transition-colors border",
+                filters.channels.includes(ch)
+                  ? "bg-slate-700 text-white border-transparent"
+                  : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
+              )}
+            >
+              {ch}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Age Band */}
       <div>
         <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Age</div>
@@ -287,6 +308,7 @@ export function LaunchFilterPanel({ filters, onChange, total }: Props) {
         filters.innovationTypes.length > 0 ||
         filters.launchOutcomes.length > 0 ||
         filters.velocityTiers.length > 0 ||
+        filters.channels.length > 0 ||
         filters.searchQuery) && (
         <button
           onClick={() =>
@@ -300,6 +322,7 @@ export function LaunchFilterPanel({ filters, onChange, total }: Props) {
               innovationTypes: [],
               launchOutcomes: [],
               velocityTiers: [],
+              channels: [],
               sortBy: "qualityScore",
               searchQuery: "",
             })

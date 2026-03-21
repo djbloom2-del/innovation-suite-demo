@@ -62,6 +62,7 @@ export default function LaunchDetailPage() {
       survived12w:    launch.survived12w,
       survived26w:    launch.survived26w,
       survived52w:    launch.survived52w,
+      channel:        launch.channel,
     },
     bench
   );

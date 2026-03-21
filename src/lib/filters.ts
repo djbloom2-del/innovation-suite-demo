@@ -62,6 +62,10 @@ export function applyLaunchFilters(launches: Launch[], filters: LaunchFilters): 
     result = result.filter((l) => filters.velocityTiers.includes(l.velocityTier));
   }
 
+  if (filters.channels.length > 0) {
+    result = result.filter((l) => filters.channels.includes(l.channel));
+  }
+
   // Sort
   result.sort((a, b) => {
     switch (filters.sortBy) {
@@ -91,6 +95,7 @@ export const DEFAULT_FILTERS: LaunchFilters = {
   innovationTypes: [],
   launchOutcomes: [],
   velocityTiers: [],
+  channels: [],
   sortBy: "qualityScore",
   searchQuery: "",
 };

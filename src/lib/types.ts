@@ -22,6 +22,8 @@ export type LaunchOutcome =
 
 export type VelocityTier = "Top" | "Mid" | "Bottom";
 
+export type RetailChannel = "Natural" | "MULO" | "Both";
+
 export interface AttributeSet {
   form: string;
   flavor: string;
@@ -83,6 +85,7 @@ export interface Launch {
   // composite score
   launchQualityScore: number; // 0–100
   innovationType: InnovationType;
+  channel: RetailChannel;
   // Year-over-year lifecycle
   dollarsY1: number | null;
   dollarsY2: number | null;
@@ -222,6 +225,7 @@ export interface LaunchFilters {
   innovationTypes: InnovationType[];
   launchOutcomes: LaunchOutcome[];
   velocityTiers: VelocityTier[];
+  channels: RetailChannel[];
   sortBy: "qualityScore" | "growth" | "velocity" | "distribution";
   searchQuery: string;
 }
