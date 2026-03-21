@@ -2,6 +2,7 @@
 
 import { CATEGORIES } from "@/data/categories";
 import { BRANDS } from "@/data/brands";
+import { NEED_STATE_LIST, NEED_STATE_META } from "@/data/needStates";
 import type { LaunchFilters, InnovationType, LaunchOutcome, VelocityTier, RetailChannel } from "@/lib/types";
 import { INNOVATION_TYPE_META, INNOVATION_TYPES } from "@/lib/innovation";
 import { cn, VELOCITY_TIER_META } from "@/lib/utils";
@@ -188,6 +189,32 @@ export function LaunchFilterPanel({ filters, onChange, total }: Props) {
         </div>
       </div>
 
+      {/* Need State */}
+      <div>
+        <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Need State</div>
+        <div className="flex flex-wrap gap-1.5">
+          {NEED_STATE_LIST.filter((ns) => ns !== "Broad Wellness").map((ns) => (
+            <button
+              key={ns}
+              onClick={() => set({ needStates: toggle(filters.needStates, ns) })}
+              style={
+                filters.needStates.includes(ns)
+                  ? { backgroundColor: NEED_STATE_META[ns].hex, borderColor: NEED_STATE_META[ns].hex }
+                  : {}
+              }
+              className={cn(
+                "px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors border",
+                filters.needStates.includes(ns)
+                  ? "text-white border-transparent"
+                  : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
+              )}
+            >
+              {ns}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Age Band */}
       <div>
         <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Age</div>
@@ -309,6 +336,7 @@ export function LaunchFilterPanel({ filters, onChange, total }: Props) {
         filters.launchOutcomes.length > 0 ||
         filters.velocityTiers.length > 0 ||
         filters.channels.length > 0 ||
+        filters.needStates.length > 0 ||
         filters.searchQuery) && (
         <button
           onClick={() =>
