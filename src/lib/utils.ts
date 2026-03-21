@@ -78,6 +78,9 @@ export function ageLabel(weeks: number): string {
 }
 
 // Shared price-tier breakpoints — also imported by analogs.ts for priceTierIndex
+// Snapshot date used for all relative-date calculations (launch age, cohort months, etc.)
+export const DATA_SNAPSHOT_DATE = "2026-03-08";
+
 export const PRICE_TIER_THRESHOLDS = [3, 6, 10] as const;
 
 export function priceTierLabel(price: number): string {

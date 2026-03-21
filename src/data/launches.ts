@@ -1,13 +1,10 @@
 import type { Launch, AttributeSet, Retailer, InnovationType, LaunchOutcome, VelocityTier, RetailChannel, NeedState } from "@/lib/types";
 import { classifyInnovationType } from "@/lib/innovation";
-import { computeQualityScore } from "@/lib/utils";
+import { computeQualityScore, DATA_SNAPSHOT_DATE } from "@/lib/utils";
 import { getBenchmark } from "@/data/categories";
 import { HEALTH_FOCUS_MAP, FUNCTIONAL_INGREDIENT_SECONDARY_MAP } from "@/data/needStates";
 
 type RawLaunch = Omit<Launch, "innovationType" | "velocityTier" | "needState" | "needStateSecondary">;
-
-// Snapshot date used for all relative-date calculations (launch age, cohort months, etc.)
-export const DATA_SNAPSHOT_DATE = "2026-03-08";
 
 // Deterministic seeded RNG
 function rng(seed: number) {

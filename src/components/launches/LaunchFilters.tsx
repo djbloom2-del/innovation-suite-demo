@@ -3,7 +3,7 @@
 import { CATEGORIES } from "@/data/categories";
 import { BRANDS } from "@/data/brands";
 import { NEED_STATE_LIST, NEED_STATE_META } from "@/data/needStates";
-import type { LaunchFilters, InnovationType, LaunchOutcome, VelocityTier, RetailChannel } from "@/lib/types";
+import type { LaunchFilters, InnovationType, LaunchOutcome, VelocityTier, RetailChannel, NeedState } from "@/lib/types";
 import { INNOVATION_TYPE_META, INNOVATION_TYPES } from "@/lib/innovation";
 import { cn, VELOCITY_TIER_META } from "@/lib/utils";
 import { Search, SlidersHorizontal } from "lucide-react";

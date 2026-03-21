@@ -1,5 +1,5 @@
 import type { NeedState, Category, InnovationType, Launch } from "@/lib/types";
-import { DATA_SNAPSHOT_DATE } from "@/data/launches";
+import { DATA_SNAPSHOT_DATE } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
 // Display metadata
@@ -90,6 +90,7 @@ export const HEALTH_FOCUS_MAP: Record<string, NeedState> = {
   "Anti-Inflammatory":  "Recovery",
 };
 
+// Note: compound keys (e.g. "elderberry + zinc") are not used — single-token matching covers the same cases after split(/[+,]/)
 export const FUNCTIONAL_INGREDIENT_SECONDARY_MAP: Record<string, NeedState> = {
   "melatonin":           "Sleep",
   "l-theanine":          "Mood Support",

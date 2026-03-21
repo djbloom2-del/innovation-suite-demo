@@ -1,5 +1,6 @@
 import type { CohortRow, Category } from "@/lib/types";
-import { LAUNCHES, DATA_SNAPSHOT_DATE } from "./launches";
+import { LAUNCHES } from "./launches";
+import { DATA_SNAPSHOT_DATE } from "@/lib/utils";
 
 function getMonthKey(dateStr: string): string {
   return dateStr.slice(0, 7) + "-01";
