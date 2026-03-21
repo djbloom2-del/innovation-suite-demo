@@ -31,8 +31,9 @@ import {
   ScatterChart,
   Scatter,
   ZAxis,
+  Label,
 } from "recharts";
-import { Zap, ListFilter, ShieldCheck, BarChart2, SlidersHorizontal } from "lucide-react";
+import { Zap, ListFilter, ShieldCheck, BarChart2, SlidersHorizontal, Info } from "lucide-react";
 import { AttributeIntelligenceSection } from "@/components/winner-dna/AttributeIntelligenceSection";
 
 const ATTR_COLORS = [
@@ -178,20 +179,45 @@ export default function WinnerDNA() {
   const comboTableData = useMemo(() => {
     const catLaunches = LAUNCHES.filter(l => l.category === category);
     const catWinners  = getWinners(catLaunches);
-    const catWinRate  = catLaunches.length ? catWinners.length / catLaunches.length : 0;
+    const catBaseline = catLaunches.length ? catWinners.length / catLaunches.length : 0;
 
-    const pairs: { label: string; count: number; winRate: number; lift: number }[] = [];
+    const rows: { label: string; count: number; winRate: number; lift: number; attrCount: number }[] = [];
+
+    // 2-attribute pairs
     for (let i = 0; i < ATTR_KEYS.length; i++) {
       for (let j = i + 1; j < ATTR_KEYS.length; j++) {
         const a = ATTR_KEYS[i];
         const b = ATTR_KEYS[j];
         const withBoth = catLaunches.filter(l => matchesAttr(l, a) && matchesAttr(l, b));
         const winRate  = withBoth.length ? getWinners(withBoth).length / withBoth.length : 0;
-        const lift     = catWinRate > 0 ? winRate / catWinRate : 1;
-        pairs.push({ label: `${a} + ${b}`, count: withBoth.length, winRate, lift });
+        const lift     = catBaseline > 0 ? winRate / catBaseline : 1;
+        rows.push({ label: `${a} + ${b}`, count: withBoth.length, winRate, lift, attrCount: 2 });
       }
     }
-    return pairs.sort((a, b) => b.lift - a.lift).slice(0, 10);
+
+    // 3-attribute triples
+    for (let i = 0; i < ATTR_KEYS.length - 2; i++) {
+      for (let j = i + 1; j < ATTR_KEYS.length - 1; j++) {
+        for (let k = j + 1; k < ATTR_KEYS.length; k++) {
+          const a1 = ATTR_KEYS[i] as string, a2 = ATTR_KEYS[j] as string, a3 = ATTR_KEYS[k] as string;
+          const matching = catLaunches.filter(
+            (l) => matchesAttr(l, a1 as any) && matchesAttr(l, a2 as any) && matchesAttr(l, a3 as any)
+          );
+          if (matching.length < 2) continue;
+          const winners = matching.filter((l) => l.launchQualityScore >= 70);
+          const wr = winners.length / matching.length;
+          rows.push({
+            label: [a1, a2, a3].join(" + "),
+            count: matching.length,
+            winRate: wr,
+            lift: +(wr / catBaseline).toFixed(2),
+            attrCount: 3,
+          });
+        }
+      }
+    }
+
+    return rows.sort((a, b) => b.lift - a.lift).slice(0, 15);
   }, [category]);
 
   const explorerData = useMemo(() => {
@@ -399,6 +425,28 @@ export default function WinnerDNA() {
 
   const chartAttrsToShow = trendsShowAttrs.length > 0 ? trendsShowAttrs : ATTR_KEYS.slice(0, 4);
 
+  // Baseline win rate % for the Attribute Win Rate chart tooltip
+  const baselineWinRatePct = attrScorecard.length > 0 ? Math.round(attrScorecard[0].catWinRate * 100) : 0;
+
+  // Custom tooltip for Attribute Win Rate chart
+  const AttrWinRateTooltip = ({ active, payload }: any) => {
+    if (!active || !payload?.length) return null;
+    const d = payload[0].payload;
+    return (
+      <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-sm text-xs max-w-[200px]">
+        <p className="font-semibold text-slate-700 mb-1">{d.name}</p>
+        <p className="text-slate-600">
+          <span className="font-medium text-green-600">{d.winRate}%</span> of {category} launches
+          with this attribute reach quality score ≥ 70
+        </p>
+        <p className="text-slate-400 mt-1">
+          {d.overindex}× the {category} average ({baselineWinRatePct}%)
+        </p>
+        <p className="text-slate-400">Based on {d.launches} launches</p>
+      </div>
+    );
+  };
+
   // ────────────────────────────────────────────────────────────────
 
   return (
@@ -452,25 +500,21 @@ export default function WinnerDNA() {
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-            {/* Win Rate by Attribute */}
+            {/* Attribute Win Rate */}
             <div className="xl:col-span-2 bg-white rounded-xl border border-slate-200 p-5">
               <h2 className="text-sm font-semibold text-slate-700 mb-1">
-                Win Rate by Attribute — {category}
+                Attribute Win Rate — {category}
               </h2>
-              <p className="text-xs text-slate-400 mb-4">
-                % of launches with this attribute that reach top-quartile quality score.
-                Overindex = win rate ÷ category baseline.
+              <p className="text-xs text-slate-400 mb-3">
+                Win rate = % of launches with this attribute that achieve quality score ≥ 70. Overindex = vs. category baseline.
               </p>
               <ResponsiveContainer width="100%" height={320}>
-                <BarChart data={barData} layout="vertical" margin={{ left: 12, right: 60, top: 0, bottom: 0 }}>
-                  <XAxis type="number" tickFormatter={(v) => `${v}%`} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} domain={[0, 100]} />
+                <BarChart data={barData} layout="vertical" margin={{ left: 12, right: 60, top: 0, bottom: 20 }}>
+                  <XAxis type="number" tickFormatter={(v) => `${v}%`} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} domain={[0, 100]}>
+                    <Label value="Win Rate (%)" position="insideBottom" offset={-4} style={{ fontSize: 10, fill: '#94a3b8' }} />
+                  </XAxis>
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={90} axisLine={false} tickLine={false} />
-                  <Tooltip
-                    formatter={(v: any, name: any) =>
-                      name === "winRate" ? [`${v}%`, "Win Rate"] : [v + "×", "Overindex"]
-                    }
-                    contentStyle={{ fontSize: 11, border: "1px solid #e2e8f0" }}
-                  />
+                  <Tooltip content={<AttrWinRateTooltip />} />
                   <Bar dataKey="winRate" radius={[0, 4, 4, 0]}>
                     {barData.map((_, idx) => (
                       <Cell key={idx} fill={ATTR_COLORS[idx % ATTR_COLORS.length]} />
@@ -563,21 +607,26 @@ export default function WinnerDNA() {
             </div>
           </div>
 
-          {/* Dynamic 2-attribute combo table */}
+          {/* Attribute Combination Performance table */}
           <div className="bg-white rounded-xl border border-slate-200 p-5">
             <div className="flex items-center gap-2 mb-1">
               <Zap size={14} className="text-blue-500" />
               <h2 className="text-sm font-semibold text-slate-700">Attribute Combination Performance — {category}</h2>
             </div>
             <p className="text-xs text-slate-400 mb-4">
-              All two-attribute pairs ranked by win-rate lift vs. category baseline. Computed live from {category} launches.
+              Two- and three-attribute combinations ranked by win-rate lift vs. category baseline. Computed live from {category} launches.
             </p>
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-slate-100">
                   <th className="text-left pb-2 text-slate-400 font-medium">Combination</th>
                   <th className="text-right pb-2 text-slate-400 font-medium"># Launches</th>
-                  <th className="text-right pb-2 text-slate-400 font-medium">Win %</th>
+                  <th className="text-right pb-2 text-slate-400 font-medium">
+                    Success Rate{" "}
+                    <span title="% of launches with this combination that achieve quality score ≥ 70">
+                      <Info size={12} className="inline mb-0.5 text-slate-400" />
+                    </span>
+                  </th>
                   <th className="text-right pb-2 text-slate-400 font-medium">Lift</th>
                   <th className="text-right pb-2 text-slate-400 font-medium">vs. Baseline</th>
                 </tr>
@@ -588,7 +637,13 @@ export default function WinnerDNA() {
                   const diffPct   = Math.round((row.winRate - (comboTableData[0]?.lift > 0 ? comboTableData[0].winRate / comboTableData[0].lift : 0)) * 100);
                   return (
                     <tr key={i} className="border-b border-slate-50 hover:bg-slate-50">
-                      <td className="py-2 text-slate-700 font-medium">{row.label}</td>
+                      <td className="py-2 text-slate-700 font-medium">
+                        {row.label}
+                        {row.attrCount === 2
+                          ? <span className="text-[9px] bg-slate-100 text-slate-500 px-1 rounded ml-1">2</span>
+                          : <span className="text-[9px] bg-indigo-50 text-indigo-600 px-1 rounded ml-1">3</span>
+                        }
+                      </td>
                       <td className="py-2 text-right text-slate-400">{row.count}</td>
                       <td className="py-2 text-right text-green-600 font-semibold">{Math.round(row.winRate * 100)}%</td>
                       <td className={`py-2 text-right ${liftColor}`}>{row.lift.toFixed(1)}×</td>
