@@ -66,6 +66,10 @@ export function applyLaunchFilters(launches: Launch[], filters: LaunchFilters): 
     result = result.filter((l) => filters.channels.includes(l.channel));
   }
 
+  if (filters.needStates.length > 0) {
+    result = result.filter((l) => filters.needStates.includes(l.needState));
+  }
+
   // Sort
   result.sort((a, b) => {
     switch (filters.sortBy) {

@@ -1,8 +1,8 @@
-import type { Launch, AttributeSet, Retailer, InnovationType, LaunchOutcome, VelocityTier, RetailChannel } from "@/lib/types";
+import type { Launch, AttributeSet, Retailer, InnovationType, LaunchOutcome, VelocityTier, RetailChannel, NeedState } from "@/lib/types";
 import { classifyInnovationType } from "@/lib/innovation";
 import { computeQualityScore } from "@/lib/utils";
 import { getBenchmark } from "@/data/categories";
-import { computeNeedState, launchToNeedStateInput } from "@/data/needStates";
+import { HEALTH_FOCUS_MAP, FUNCTIONAL_INGREDIENT_SECONDARY_MAP } from "@/data/needStates";
 
 type RawLaunch = Omit<Launch, "innovationType" | "velocityTier" | "needState" | "needStateSecondary">;
 
@@ -385,8 +385,23 @@ export const LAUNCHES: Launch[] = WITH_INNOVATION.map((l) => {
     rank >= Math.floor(n * 2 / 3) ? "Top" :
     rank >= Math.floor(n / 3)     ? "Mid" :
     "Bottom";
-  const { primary, secondary } = computeNeedState(launchToNeedStateInput(l as Launch));
-  return { ...l, velocityTier: tier, needState: primary, needStateSecondary: secondary };
+  // Inline classification (avoids unsafe cast, cleaner circular dep)
+  const healthFocusVal = l.attributes.healthFocus ?? null;
+  const needState: NeedState = (healthFocusVal && HEALTH_FOCUS_MAP[healthFocusVal]) || "Broad Wellness";
+
+  const rawIngredients = l.attributes.functionalIngredient
+    ? l.attributes.functionalIngredient.split(/[+,]/).map((s: string) => s.trim().toLowerCase())
+    : [];
+  let needStateSecondary: NeedState | null = null;
+  for (const token of rawIngredients) {
+    const ns = FUNCTIONAL_INGREDIENT_SECONDARY_MAP[token];
+    if (ns && ns !== needState) {
+      needStateSecondary = ns;
+      break;
+    }
+  }
+
+  return { ...l, velocityTier: tier, needState, needStateSecondary };
 });
 
 export function getLaunchByUpc(upc: string): Launch | undefined {

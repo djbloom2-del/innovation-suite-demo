@@ -1,4 +1,5 @@
 import type { NeedState, Category, InnovationType, Launch } from "@/lib/types";
+import { DATA_SNAPSHOT_DATE } from "@/data/launches";
 
 // ---------------------------------------------------------------------------
 // Display metadata
@@ -184,7 +185,7 @@ export function getNeedStatePerformance(launches?: Launch[]): NeedStatePerf[] {
   const results: NeedStatePerf[] = [];
 
   for (const [needState, group] of grouped) {
-    if (needState === "Broad Wellness") continue;
+    if (needState === "Broad Wellness") continue; // Excluded from charts — catch-all bucket
 
     const launchCount = group.length;
     const winners = group.filter((l) => l.launchQualityScore >= 70);
@@ -222,7 +223,7 @@ export function getNeedStatePerformance(launches?: Launch[]): NeedStatePerf[] {
 export function getNeedStateTrends(launches?: Launch[]): NeedStateTrendRow[] {
   const data = launches ?? getDefaultLaunches();
   // Last 12 months from DATA_SNAPSHOT_DATE
-  const snapshot = new Date("2026-03-08");
+  const snapshot = new Date(DATA_SNAPSHOT_DATE);
   const cutoff = new Date(snapshot);
   cutoff.setMonth(cutoff.getMonth() - 12);
 
@@ -243,7 +244,7 @@ export function getNeedStateTrends(launches?: Launch[]): NeedStateTrendRow[] {
     nsMap.set(l.needState, (nsMap.get(l.needState) ?? 0) + 1);
   }
 
-  // Build all months in range
+  // Build all months in range (exactly 12)
   const months: string[] = [];
   const cur = new Date(cutoff);
   cur.setDate(1);
@@ -251,6 +252,7 @@ export function getNeedStateTrends(launches?: Launch[]): NeedStateTrendRow[] {
     months.push(cur.toISOString().split("T")[0]);
     cur.setMonth(cur.getMonth() + 1);
   }
+  months.splice(12); // Ensure exactly 12 months
 
   return months.map((month) => {
     const row: NeedStateTrendRow = { month };
@@ -267,7 +269,7 @@ export function getNeedStateByInnoType(launches?: Launch[]): NeedStateInnoRow[] 
   const grouped = new Map<NeedState, NeedStateInnoRow>();
 
   for (const l of data) {
-    if (l.needState === "Broad Wellness") continue;
+    if (l.needState === "Broad Wellness") continue; // Excluded from charts — catch-all bucket
 
     if (!grouped.has(l.needState)) {
       grouped.set(l.needState, {
